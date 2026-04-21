@@ -1,0 +1,61 @@
+SHAMITAB - ROADMAP
+==============================
+Last updated: 2026-04-21
+
+Status values: NOT STARTED | IN PROGRESS | DONE
+
+======================================================
+BUILD ORDER
+======================================================
+
+1. Add data-time-index to all time-divisions       DONE
+2. Refactor arc targeting to use data-time-index   DONE
+3. Triplet UI and data model                       DONE
+4. Rename data attributes                          DONE
+5. Staff unit selection tracking                   DONE
+6. Barline palette wiring                          DONE
+7. Page generation wired to menu                   DONE
+8. Repeat and stop barlines                        DONE
+9. Save                                            DONE
+10. Load                                           DONE
+11. Pre-release polish                             DONE
+    - Favicon, Open Graph metadata, preview image
+    - Logo and app title in menubar
+    - Warm grey + amber colour scheme
+    - Watermark on each page
+    - Instructions slide-in panel
+    - About page (opens in new tab)
+    - Menubar: About | Instructions | Buy me a boba
+    - README.md and LICENSE (CC BY 4.0)
+    - Bug fix: mutually exclusive technique marks
+      (sukui, hajiki, keshi, uchi)
+12. Ko-fi account and link wiring                  DONE
+
+======================================================
+V1.1
+======================================================
+
+13. Japanese language version                      DONE
+    - EN/JA toggle in menubar
+    - All UI text, palette, menus translated
+    - Info panel bilingual
+    - about-ja.html created
+    - Header and lyric placeholder text translated
+    - Language preference saved to localStorage
+    - New pages created in active language
+14. ShamiWorks landing page (shamiworks.github.io) NOT STARTED
+15. Keyboard navigation between units              NOT STARTED
+16. Multi time-division selection                  NOT STARTED
+17. Multi-staff selection                          NOT STARTED
+18. Copy                                           NOT STARTED
+19. Paste                                          NOT STARTED
+20. Great staff                                    NOT STARTED
+
+======================================================
+NOTES
+======================================================
+- localStorage dropped for v1. File save/load only.
+- localStorage used in v1.1 for language preference only.
+- Bar counter display dropped for v1.
+- App renamed from "Tsubo Notation App" to ShamiTab.
+- Published under ShamiWorks identity.

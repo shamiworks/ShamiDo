@@ -17,7 +17,7 @@
    inkscape:export-filename="C:\Users\Greg\Documents\Greg's Docs\ShamiWorks\shamiworks-avatar-white.png"
    inkscape:export-xdpi="95.999992"
    inkscape:export-ydpi="95.999992"
-   sodipodi:docname="ShamiWorks logo.svg"
+   sodipodi:docname="shamiworks-logo-black.svg"
    inkscape:version="0.92.4 (5da689c313, 2019-01-14)">
   <defs
      id="defs10" />
@@ -54,7 +54,7 @@
         <dc:format>image/svg+xml</dc:format>
         <dc:type
            rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
-        <dc:title></dc:title>
+        <dc:title />
       </cc:Work>
     </rdf:RDF>
   </metadata>
@@ -71,20 +71,14 @@
      id="layer3"
      inkscape:label="Layer 3">
     <path
-       style="fill:#ffffff;stroke-width:2.79411793"
-       d="m 80.882364,80.882364 c 0,0 139.705886,-55.882354 419.117656,-55.882354 279.41178,0 419.11766,55.882354 419.11766,55.882354 0,0 55.88236,139.705886 55.88236,419.056666 0,279.35079 -55.88236,419.17865 -55.88236,419.17865 0,0 -139.70588,55.88236 -419.47709,55.88236 -279.77121,0 -418.758226,-55.88236 -418.758226,-55.88236 0,0 -55.882354,-139.82786 -55.882354,-419.17865 0,-279.35078 55.882354,-419.056666 55.882354,-419.056666 z"
+       style="fill:none;stroke:#000000;stroke-width:42.17336655;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       d="m 107.20885,107.20885 c 0,0 130.93039,-52.372157 392.79117,-52.372157 261.86079,0 392.79117,52.372157 392.79117,52.372157 0,0 52.37217,130.93039 52.37217,392.73401 0,261.80363 -52.37217,392.84833 -52.37217,392.84833 0,0 -130.93038,52.37217 -393.12802,52.37217 -262.19764,0 -392.45432,-52.37217 -392.45432,-52.37217 0,0 -52.372157,-131.0447 -52.372157,-392.84833 0,-261.80362 52.372157,-392.73401 52.372157,-392.73401 z"
        id="rect25"
        inkscape:connector-curvature="0"
        sodipodi:nodetypes="czczczczc" />
-    <path
-       sodipodi:nodetypes="czczczczc"
-       inkscape:connector-curvature="0"
-       id="path23"
-       d="m 122.314,117.44004 c 0,0 125.89601,-51.007995 377.68602,-51.007995 251.79001,0 377.68602,51.007995 377.68602,51.007995 0,0 50.35801,127.52 50.35801,382.50431 0,254.98431 -50.35801,382.61566 -50.35801,382.61566 0,0 -125.89601,51.00799 -378.01001,51.00799 -252.11402,0 -377.36203,-51.00799 -377.36203,-51.00799 0,0 -50.358008,-127.63135 -50.358008,-382.61566 0,-254.98431 50.358008,-382.50432 50.358008,-382.50431 z"
-       style="fill:#000000;stroke-width:2.53410006" />
     <text
        xml:space="preserve"
-       style="font-style:normal;font-weight:normal;font-size:871.98071289px;line-height:1.25;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#ffffff;fill-opacity:1;stroke:none;stroke-width:9.0831337;"
+       style="font-style:normal;font-weight:normal;font-size:871.98071289px;line-height:1.25;font-family:sans-serif;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;stroke-width:9.0831337;"
        x="66.240768"
        y="804.39294"
        id="text46"
@@ -93,6 +87,6 @@
          id="tspan44"
          x="66.240768"
          y="804.39294"
-         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-family:Stick;-inkscape-font-specification:Stick;fill:#ffffff;stroke-width:9.0831337;">三</tspan></text>
+         style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-family:Stick;-inkscape-font-specification:Stick;fill:#000000;stroke-width:9.0831337;fill-opacity:1;">三</tspan></text>
   </g>
 </svg>
