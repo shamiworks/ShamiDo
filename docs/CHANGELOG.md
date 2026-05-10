@@ -1,9 +1,9 @@
-# Shamidō 三味道 Changelog
+# ShamiDō 三味道 Changelog
 
 ## v1.1 (in progress)
 
 ### Branding
-- App renamed from ShamiTab to Shamidō 三味道
+- App renamed from ShamiTab to ShamiDō 三味道
 - Watermark updated to reflect new name
 
 ### New Features

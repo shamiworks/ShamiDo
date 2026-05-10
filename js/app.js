@@ -3219,7 +3219,7 @@ const STRINGS = {
     'palette-paste':         'Paste',
     'palette-toggle-blank':  'Hide',
     'palette-toggle-show':   'Show',
-    'watermark':             'Created with Shamidō by ShamiWorks',
+    'watermark':             'Created with ShamiDō by ShamiWorks',
   },
   ja: {
     'lang-toggle':           'English',
