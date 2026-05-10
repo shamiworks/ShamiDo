@@ -210,6 +210,12 @@ body {
     background-color: #5c5248;
 }
 
+.menu-dropdown-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+  pointer-events: none;
+}
+
 .file-menu {
     left: 40px;
 }
@@ -447,6 +453,10 @@ body {
   content: attr(data-placeholder);
   color: lightgrey;
   pointer-events: none;
+  font-family: inherit;
+  font-size: inherit;
+  font-style: inherit;
+  font-weight: inherit;
 }
 
 /* ---- Staff unit ---- */
@@ -455,6 +465,8 @@ body {
   grid-template-columns: 10mm 180mm;
   width: 190mm;
   height: 25mm;
+  user-select: none;
+  overflow: visible;
 
   /* outline: 1px solid red; */
 
@@ -478,18 +490,30 @@ body {
   display: grid;
   grid-template-columns: auto 5.4mm;
   grid-template-rows: repeat(6,4mm);
-  width: 10mm;
+  width: 15mm;
   height: 20mm;
+  margin-left: -5mm;
+  overflow: hidden;
 
 }
 
 .bar-number {
   display: flex;
-  justify-self: left;
+  justify-content: flex-end;
   align-items: center;
-  grid-column: 1 / span 2;
-  height: 4mm;
-  
+  grid-column: 1;
+  grid-row: 1;
+  font-size: 11pt;
+}
+
+.part-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  grid-column: 1;
+  grid-row: 2 / span 3;
+  font-size: 14pt;
+  overflow: hidden;
 }
 
 .string-number {
@@ -544,7 +568,8 @@ body {
   outline-offset: -0.2mm;
 }
 
-.staff-unit.selected-unit .staff-section {
+.staff-unit.selected-unit .staff-section,
+.staff-section.selected {
   outline: 0.4mm solid rgba(200,160,48,0.4);
   outline-offset: -0.2mm;
 }
@@ -556,6 +581,17 @@ body {
 .tuning-field:focus,
 .arranger-field:focus,
 .lyric-line:focus {
+  outline: 0.4mm solid rgba(200,160,48,0.4);
+  outline-offset: -0.2mm;
+}
+
+.bar-number,
+.part-label {
+  outline: none;
+}
+
+.bar-number:focus,
+.part-label:focus {
   outline: 0.4mm solid rgba(200,160,48,0.4);
   outline-offset: -0.2mm;
 }
@@ -690,6 +726,16 @@ body {
   padding: 0; /* no extra padding needed */
 }
 
+.staff-unit.blank .staff-section,
+.staff-unit.blank .staff-metadata,
+.lyric-unit.blank {
+  visibility: hidden;
+}
+
+.staff-unit.blank.selected-unit {
+  outline: 0.4mm solid rgba(200,160,48,0.4);
+  outline-offset: -0.2mm;
+}
 
 /* ---- End Workspace Rules ---- */
 
@@ -737,8 +783,42 @@ body {
 
 /* ---- End Print rules ---- */
 
+.logo-dropdown-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.logo-dropdown {
+    display: none;
+    position: fixed;
+    top: 40px;
+    left: 0;
+    width: 200px;
+    background: #353029;
+    border: 1px solid rgb(177, 177, 177);
+    padding-bottom: 5px;
+    z-index: 1000;
+}
+
+.logo-dropdown.open {
+    display: block;
+}
+
 @media (max-width: 700px) {
     .menu-right {
         display: none;
+    }
+}
+
+@media (max-width: 480px) {
+    .info-panel {
+        width: 100%;
+        right: -100%;
+    }
+    
+    .info-panel.open {
+        width: 100%;
+        right: 0;
     }
 }

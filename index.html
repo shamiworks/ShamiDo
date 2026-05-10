@@ -3,12 +3,12 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta property="og:title" content="ShamiTab" />
-  <meta property="og:description" content="ShamiTab is a free web-based notation app for shamisen, designed primarily for Tsugaru style. Create, edit and print tablature directly in your browser." />
+  <meta property="og:title" content="Shamidō" />
+  <meta property="og:description" content="Shamidō is a free web-based notation app for shamisen, designed primarily for Tsugaru style. Create, edit and print tablature directly in your browser." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://shamiworks.github.io/ShamiTab/" />
   <meta property="og:image" content="https://shamiworks.github.io/ShamiTab/assets/preview.png" />
-  <title>ShamiTab</title>
+  <title>Shamidō</title>
   <link rel="stylesheet" href="css/styles.css"/>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+JP&display=swap" rel="stylesheet">
   <link href="https://fonts.googleapis.com/css2?family=M+PLUS+2:wght@100..900&display=swap" rel="stylesheet">
@@ -20,10 +20,18 @@
   <!-- Main Menu -->
   <div class="ui">
     <div class="menubar">
-      <img src="assets/shamiworks-logo-white.svg" class="icon" alt="ShamiWorks logo" />
+      <div class="logo-dropdown-wrapper">
+        <img src="assets/shamido-logo-white.svg" class="icon" alt="ShamiWorks logo" id="logo-dropdown-toggle" />
+        <div class="logo-dropdown">
+          <button type="button" class="menu-dropdown-btn" id="logo-lang-toggle">日本語</button>
+          <button type="button" class="menu-dropdown-btn" id="logo-about-btn">About</button>
+          <button type="button" class="menu-dropdown-btn" id="logo-info-btn">Instructions</button>
+          <a href="https://ko-fi.com/shamiworks" class="menu-dropdown-btn" id="logo-kofi-btn">Buy me a boba</a>
+        </div>
+      </div>
       <div class="menu-title-block">
-        <div class="menu-title-en">ShamiTab</div>
-        <div class="menu-title-ja">三味タブ</div>
+        <div class="menu-title-en">Shamidō</div>
+        <div class="menu-title-ja">三味道</div>
       </div>
       <button type="button" class="menu-btn" data-menu="file">File</button>
       <button type="button" class="menu-btn" data-menu="edit">Edit</button>
@@ -46,14 +54,14 @@
       </div>
       <button type="button" class="menu-dropdown-btn" id="open-file">Open</button>
       <button type="button" class="menu-dropdown-btn" id="save-file">Save</button>
-      <button type="button" class="menu-dropdown-btn" id="print-file">Print</button>
+      <button type="button" class="menu-dropdown-btn" id="print-file">Export / Print</button>
     </div>
 
     <div class="menu-dropdown edit-menu" data-menu="edit">
-      <button type="button" class="menu-dropdown-btn" id="edit-undo" style="text-decoration: line-through">Undo</button>
-      <button type="button" class="menu-dropdown-btn" id="edit-redo" style="text-decoration: line-through">Redo</button>
-      <button type="button" class="menu-dropdown-btn" id="edit-copy" style="text-decoration: line-through">Copy</button>
-      <button type="button" class="menu-dropdown-btn" id="edit-paste" style="text-decoration: line-through">Paste</button>
+      <button type="button" class="menu-dropdown-btn" id="edit-undo">Undo</button>
+      <button type="button" class="menu-dropdown-btn" id="edit-redo">Redo</button>
+      <button type="button" class="menu-dropdown-btn" id="edit-copy">Copy</button>
+      <button type="button" class="menu-dropdown-btn" id="edit-paste">Paste</button>
     </div>
 
     <div class="menu-dropdown page-menu" data-menu="page">
@@ -210,29 +218,38 @@
         <button type="button" class="palette-btn" data-action="measure" data-value="8" title="8 measures">8</button>
       </div>
       <div class="palette-item">
-        <button type="button" class="palette-btn, palette-bar-line" data-action="barline-type" data-value="stop" title="Stop barline">𝄁</button>
+        <button type="button" class="palette-btn palette-bar-line" data-action="barline-type" data-value="stop" title="Stop barline">𝄁</button>
       </div>
       <div class="palette-item">
-        <button type="button" class="palette-btn, palette-bar-line" data-action="barline-type" data-value="open-repeat" title="Open repeat">𝄆</button>
+        <button type="button" class="palette-btn palette-bar-line" data-action="barline-type" data-value="open-repeat" title="Open repeat">𝄆</button>
       </div>
       <div class="palette-item">
-        <button type="button" class="palette-btn, palette-bar-line" data-action="barline-type" data-value="close-repeat" title="Close repeat">𝄇</button>
+        <button type="button" class="palette-btn palette-bar-line" data-action="barline-type" data-value="close-repeat" title="Close repeat">𝄇</button>
       </div>
       <div class="palette-item">
-        <button type="button" class="palette-btn, palette-bar-line" data-action="barline-type" data-value="normal" title="Normal barline">𝄀</button>
+        <button type="button" class="palette-btn palette-bar-line" data-action="barline-type" data-value="normal" title="Normal barline">𝄀</button>
+      </div>
+      <div class="palette-header">Great staff</div>
+      <div class="palette-item">
+        <button type="button" class="palette-btn palette-bar-line" data-action="great-staff-add" title="Add great staff">|</button>
+      </div>
+      <div class="palette-item">
+        <button type="button" class="palette-btn palette-bar-line" data-action="great-staff-remove" title="Remove great staff">✕</button>
       </div>
       <div class="palette-header">Editing</div>
       <div class="palette-item">
-        <button type="button" class="palette-btn" data-action="editing" data-value="copy" style="text-decoration: line-through">Copy</button>
+        <button type="button" class="palette-btn" data-action="editing" data-value="copy">Copy</button>
       </div>
       <div class="palette-item">
-        <button type="button" class="palette-btn" data-action="editing" data-value="paste" style="text-decoration: line-through">Paste</button>
+        <button type="button" class="palette-btn" data-action="editing" data-value="paste">Paste</button>
       </div>
       <div class="palette-item">
         <button type="button" class="palette-btn" data-action="clear" title="backspace">Clear</button>
       </div>
-      <div></div>
-    
+      <div class="palette-item">
+        <button type="button" class="palette-btn" data-action="toggle-blank" title="Hide/show unit">Hide</button>
+      </div>
+
     </div> <!-- End palette -->
 
   </div> <!-- End UI -->
@@ -246,22 +263,34 @@
   
   <div class="info-panel" id="info-panel">
     <button class="info-close" id="info-close">✕</button>
-
+ 
     <h2 data-en="Getting started" data-ja="はじめに">Getting started</h2>
     <p data-en="Hover over the notation area to highlight time divisions and string slots. Click a string slot to select it — selected slots are shown with an outline. You can then enter a tsubo using the keyboard or palette. Click a time division outside a string slot to select the division only — this is needed for some techniques." data-ja="譜面エリアにカーソルを合わせると、タイム・ディビジョンと糸スロットがハイライトされます。糸スロットをクリックして選択すると、枠で囲まれた状態になります。キーボードまたはパレットからツボを入力できます。糸スロット以外のタイム・ディビジョンをクリックすると、ディビジョンのみが選択されます（一部の奏法で必要です）。">Hover over the notation area to highlight time divisions and string slots. Click a string slot to select it — selected slots are shown with an outline. You can then enter a tsubo using the keyboard or palette. Click a time division outside a string slot to select the division only — this is needed for some techniques.</p>
-
+ 
     <h2 data-en="Changing the number of measures" data-ja="小節数の変更">Changing the number of measures</h2>
     <p data-en="Click anywhere on a staff unit to select it — the unit is outlined when selected. Then click Free, 2, 4, or 8 in the palette." data-ja="スタッフ・ユニットをクリックして選択すると、枠で囲まれた状態になります。パレットの「フリー」「2」「4」「8」をクリックして小節数を変更します。">Click anywhere on a staff unit to select it — the unit is outlined when selected. Then click Free, 2, 4, or 8 in the palette.</p>
-
+ 
     <h2 data-en="Changing barline types" data-ja="縦線の種類の変更">Changing barline types</h2>
     <p data-en="Alt+click a barline to select it, then choose normal, repeat, or stop from the palette." data-ja="Alt+クリックで縦線を選択し、パレットから通常線・反復記号・終止線を選択します。">Alt+click a barline to select it, then choose normal, repeat, or stop from the palette.</p>
-
+ 
     <h2 data-en="Suri and oshibachi" data-ja="スリとオシバチ">Suri and oshibachi</h2>
-    <p data-en="Enter the starting tsubo and the target tsubo. Select the starting tsubo slot. Press I for suri or O for oshibachi. The arc will be drawn between the two tsubo. Both must be in the same staff unit." data-ja="起点のツボと目標のツボを入力します。起点のツボスロットを選択し、スリは I キー、オシバチは O キーを押します。2つのツボは同じスタッフ・ユニット内にある必要があります。">Enter the starting tsubo and the target tsubo. Select the starting tsubo slot. Press I for suri or O for oshibachi. The arc will be drawn between the two tsubo. Both must be in the same staff unit.</p>
-
+    <p data-en="Select a string slot and press I for suri or O for oshibachi. A placeholder arc appears immediately. Enter the start and end tsubo in any order — the arc anchors to the start tsubo and extends to the nearest entered tsubo. Both tsubo must be in the same staff unit. To remove an arc, select the start tsubo slot and press Backspace, or use Clear in the palette." data-ja="糸スロットを選択し、スリは I キー、オシバチは O キーを押します。すぐにプレースホルダーのアークが表示されます。起点と目標のツボはどちらの順で入力しても構いません。アークは起点ツボに固定され、最も近いツボまで伸びます。2つのツボは同じスタッフ・ユニット内にある必要があります。アークを削除するには、起点ツボスロットを選択して Backspace キーを押すか、パレットの「クリア」を使用します。">Select a string slot and press I for suri or O for oshibachi. A placeholder arc appears immediately. Enter the start and end tsubo in any order — the arc anchors to the start tsubo and extends to the nearest entered tsubo. Both tsubo must be in the same staff unit. To remove an arc, select the start tsubo slot and press Backspace, or use Clear in the palette.</p>
+ 
     <h2 data-en="Triplets" data-ja="三連符">Triplets</h2>
     <p data-en="Select a time division and press T. Three consecutive divisions are grouped as a triplet and a bracket is drawn below the staff. The fourth division is disabled. To remove a triplet, select any active tsubo in the group and press T again, or press Backspace." data-ja="タイム・ディビジョンを選択して T キーを押します。連続する3つのディビジョンが三連符としてグループ化され、譜面の下にブラケットが描かれます。4つ目のディビジョンは無効になります。三連符を解除するには、グループ内のいずれかのツボを選択して T キーを押すか、Backspace キーを押します。">Select a time division and press T. Three consecutive divisions are grouped as a triplet and a bracket is drawn below the staff. The fourth division is disabled. To remove a triplet, select any active tsubo in the group and press T again, or press Backspace.</p>
-
+ 
+    <h2 data-en="Selecting multiple divisions" data-ja="複数のタイム・ディビジョンの選択">Selecting multiple divisions</h2>
+    <p data-en="Click and drag across time divisions to select a range, or shift-click to extend the selection. Use Copy and Paste in the palette to duplicate content. The selection must be within a single staff unit." data-ja="タイム・ディビジョンをクリック＆ドラッグして範囲を選択するか、Shift+クリックで選択範囲を広げます。パレットの「コピー」「ペースト」で内容を複製できます。選択範囲は同じスタッフ・ユニット内に限られます。">Click and drag across time divisions to select a range, or shift-click to extend the selection. Use Copy and Paste in the palette to duplicate content. The selection must be within a single staff unit.</p>
+ 
+    <h2 data-en="Selecting multiple staff units" data-ja="複数のスタッフ・ユニットの選択">Selecting multiple staff units</h2>
+    <p data-en="Click and drag across staff units to select a range, or shift-click to extend the selection. Use Copy and Paste in the palette to duplicate the selected units." data-ja="スタッフ・ユニットをクリック＆ドラッグして範囲を選択するか、Shift+クリックで選択範囲を広げます。パレットの「コピー」「ペースト」で選択したユニットを複製できます。">Click and drag across staff units to select a range, or shift-click to extend the selection. Use Copy and Paste in the palette to duplicate the selected units.</p>
+ 
+    <h2 data-en="Great staff" data-ja="連合譜">Great staff</h2>
+    <p data-en="Select two or more adjacent staff units, then click the great staff button in the palette. A continuous barline is drawn connecting the units, indicating simultaneous parts. To remove, select any unit within the group and click the remove button." data-ja="隣接する2つ以上のスタッフ・ユニットを選択し、パレットの連合譜ボタンをクリックします。ユニットをつなぐ連続した縦線が描かれ、同時演奏パートであることを示します。解除するには、グループ内のいずれかのユニットを選択して解除ボタンをクリックします。">Select two or more adjacent staff units, then click the great staff button in the palette. A continuous barline is drawn connecting the units, indicating simultaneous parts. To remove, select any unit within the group and click the remove button.</p>
+ 
+    <h2 data-en="Hiding units" data-ja="ユニットの非表示">Hiding units</h2>
+    <p data-en="Select a staff unit or lyric unit and click Hide in the palette. The unit becomes invisible but still occupies its space on the page. Click the unit's outline to select it again and click Show to make it visible. Works with multiple selected units." data-ja="スタッフ・ユニットまたはリリック・ユニットを選択し、パレットの「非表示」をクリックします。ユニットは見えなくなりますが、ページ上の位置はそのまま保持されます。ユニットの枠をクリックして再選択し、「表示」をクリックすると再び表示されます。複数のユニットを選択した状態でも使用できます。">Select a staff unit or lyric unit and click Hide in the palette. The unit becomes invisible but still occupies its space on the page. Click the unit's outline to select it again and click Show to make it visible. Works with multiple selected units.</p>
+ 
     <h2 data-en="Keyboard shortcuts" data-ja="キーボード・ショートカット">Keyboard shortcuts</h2>
     <table class="shortcut-table">
       <tr><td>0–9</td><td data-en="Tsubo" data-ja="ツボ">Tsubo</td></tr>
@@ -276,8 +305,8 @@
       <tr><td>U</td><td data-en="Uchi" data-ja="ウチ">Uchi</td></tr>
       <tr><td>M</td><td data-en="Maebachi" data-ja="前バチ">Maebachi</td></tr>
       <tr><td>A</td><td data-en="Ha" data-ja="ハ！">Ha</td></tr>
-      <tr><td>I</td><td data-en="Suri (with starting tsubo selected)" data-ja="スリ（起点ツボを選択した状態で）">Suri (with starting tsubo selected)</td></tr>
-      <tr><td>O</td><td data-en="Oshibachi (with starting tsubo selected)" data-ja="オシバチ（起点ツボを選択した状態で）">Oshibachi (with starting tsubo selected)</td></tr>
+      <tr><td>I</td><td data-en="Suri" data-ja="スリ">Suri</td></tr>
+      <tr><td>O</td><td data-en="Oshibachi" data-ja="オシバチ">Oshibachi</td></tr>
       <tr><td>T</td><td data-en="Triplet (with time division selected)" data-ja="三連符（タイム・ディビジョンを選択した状態で）">Triplet (with time division selected)</td></tr>
       <tr><td>F</td><td data-en="Finger (cycles: none → Ⅰ → Ⅱ → Ⅲ)" data-ja="指番号（なし→Ⅰ→Ⅱ→Ⅲ）">Finger (cycles: none → Ⅰ → Ⅱ → Ⅲ)</td></tr>
       <tr><td>Backspace</td><td data-en="Clear" data-ja="クリア">Clear</td></tr>

@@ -57,6 +57,58 @@ infoClose.addEventListener("click", () => {
   infoPanel.classList.remove("open");
 });
 
+/*  
+======================================================
+  Undo/redo history
+======================================================  
+*/
+
+const HISTORY_MAX = 50;
+let historyStack = [];
+let historyPointer = -1;
+let isRestoring = false;
+
+function pushHistory() {
+  if (isRestoring) return;
+  // Truncate redo history
+  historyStack = historyStack.slice(0, historyPointer + 1);
+  historyStack.push(JSON.stringify(serializeDocument()));
+  if (historyStack.length > HISTORY_MAX) historyStack.shift();
+  historyPointer = historyStack.length - 1;
+  updateUndoRedoMenu();
+}
+
+function undoHistory() {
+  if (historyPointer <= 0) return;
+  historyPointer--;
+  isRestoring = true;
+  loadDocument(JSON.parse(historyStack[historyPointer]));
+  isRestoring = false;
+  updateUndoRedoMenu();
+}
+
+function redoHistory() {
+  if (historyPointer >= historyStack.length - 1) return;
+  historyPointer++;
+  isRestoring = true;
+  loadDocument(JSON.parse(historyStack[historyPointer]));
+  isRestoring = false;
+  updateUndoRedoMenu();
+}
+
+function resetHistory() {
+  historyStack = [JSON.stringify(serializeDocument())];
+  historyPointer = 0;
+  updateUndoRedoMenu();
+}
+
+function updateUndoRedoMenu() {
+  const undoBtn = document.getElementById("edit-undo");
+  const redoBtn = document.getElementById("edit-redo");
+  if (undoBtn) undoBtn.disabled = historyPointer <= 0;
+  if (redoBtn) redoBtn.disabled = historyPointer >= historyStack.length - 1;
+}
+
 /*
 ======================================================
   Page template creation handling
@@ -110,11 +162,25 @@ function createStaffUnit() {
   const metadata = document.createElement("div");
   metadata.className = "staff-metadata";
 
+  const ph = STRINGS[currentLang] || STRINGS.en;
+
   const barNumber = document.createElement("div");
   barNumber.className = "bar-number";
+  barNumber.contentEditable = "true";
+  barNumber.spellcheck = false;
+  barNumber.dataset.placeholder = ph['metadata-bar-number'];
+  barNumber.dataset.barNumber = "";
   metadata.appendChild(barNumber);
 
-  ["3", "2", "1"].forEach(n => {
+  const partLabel = document.createElement("div");
+  partLabel.className = "part-label";
+  partLabel.contentEditable = "true";
+  partLabel.spellcheck = false;
+  partLabel.dataset.placeholder = ph['metadata-part-label'];
+  partLabel.dataset.partLabel = "";
+  metadata.appendChild(partLabel);
+
+  ["", "3", "2", "1"].forEach(n => {
     const s = document.createElement("div");
     s.className = "string-number";
     s.textContent = n;
@@ -255,7 +321,20 @@ let selectedDivision = null;
 let selectedStaffUnit = null;
 let selectedBarline = null;
 
+let multiDivisionSelection = null; // { staffUnit, startIndex, endIndex }
+let multiDivisionAnchor    = null; // integer index — held across shift+clicks
+let multiStaffSelection    = null; // { startUnit, endUnit }
+let multiStaffAnchor       = null; // integer index — held across shift+clicks
+let clipboard              = null; // { type: "divisions"|"staffUnits", data: [...] }
+
+let dragAnchorDivision = null;
+let isDragging = false;
+let isDragStaffMode = false;
+
 workspace.addEventListener("click", (e) => {
+  // Suppress click when a drag just ended
+  if (isDragging) { isDragging = false; return; }
+
   // Alt+click on barline hit target → select barline only
   // Use elementsFromPoint so hit rects in .staff-svg (z-index 1) are found
   // even when .notation-layer (z-index 2) intercepts the event target.
@@ -271,6 +350,57 @@ workspace.addEventListener("click", (e) => {
     }
   }
 
+  // Shift+click — multi-selection triggers
+  if (e.shiftKey) {
+    const division = e.target.closest(".time-division");
+    if (division) {
+      const unit = division.closest(".staff-unit");
+      const clickedIndex = Number(division.dataset.timeIndex);
+      if (multiDivisionAnchor === null) {
+        // First shift+click: establish anchor from the active single selection
+        if (selectedDivision && selectedDivision.closest(".staff-unit") !== unit) return;
+        multiDivisionAnchor = selectedDivision
+          ? Number(selectedDivision.dataset.timeIndex)
+          : clickedIndex;
+        clearMultiStaffSelection();
+        deselectBarline();
+        deselectSlot();
+        // selectedDivision is intentionally kept as the visual anchor
+      } else if (!multiDivisionSelection || multiDivisionSelection.staffUnit !== unit) {
+        return; // Subsequent shift+click on a different unit: ignore
+      }
+      // Capture anchor before applyMultiDivisionSelection nulls it via clearMultiDivisionSelection
+      const anchor = multiDivisionAnchor;
+      applyMultiDivisionSelection(unit, anchor, clickedIndex);
+      multiDivisionAnchor = anchor; // Restore after the internal clear
+      return;
+    }
+    const clickedUnit = e.target.closest(".staff-unit");
+    if (clickedUnit) {
+      const allStaff = Array.from(document.querySelectorAll(".staff-unit"));
+      const clickedIdx = allStaff.indexOf(clickedUnit);
+      if (multiStaffAnchor === null) {
+        // First shift+click: establish anchor from current staff unit selection
+        multiStaffAnchor = selectedStaffUnit
+          ? allStaff.indexOf(selectedStaffUnit)
+          : clickedIdx;
+        clearMultiDivisionSelection();
+        deselectBarline();
+        deselectSlot();
+        deselectDivision();
+      }
+      const anchor = multiStaffAnchor;
+      applyMultiStaffSelection(allStaff[anchor], allStaff[clickedIdx]);
+      multiStaffAnchor = anchor; // Restore after clearMultiStaffSelection nulls it
+      return;
+    }
+    // Shift+click elsewhere: fall through to regular-click handling
+  }
+
+  // Regular click: clear any active multi-selection
+  clearMultiDivisionSelection();
+  clearMultiStaffSelection();
+
   // Any other click clears barline selection
   deselectBarline();
 
@@ -279,6 +409,7 @@ workspace.addEventListener("click", (e) => {
     if (selectedStaffUnit) selectedStaffUnit.classList.remove("selected-unit");
     selectedStaffUnit = staffUnit;
     if (selectedStaffUnit) selectedStaffUnit.classList.add("selected-unit");
+    updateBlankButton();
   }
 
   const slot = e.target.closest(".string-slot");
@@ -296,10 +427,81 @@ workspace.addEventListener("click", (e) => {
     return;
   }
 
-  // Clicked a division but not a slot
+  // Clicked a division but not a slot → select string 1 slot
   if (division) {
-    selectDivision(division);
+    const string1Slot = division.querySelector('.string-slot[data-string="1"]');
+    if (string1Slot) {
+      selectSlot(string1Slot);
+    } else {
+      selectDivision(division);
+    }
   }
+});
+
+workspace.addEventListener("mousedown", (e) => {
+  isDragging = false;
+  isDragStaffMode = false;
+  if (e.shiftKey || e.button !== 0) return;
+  let division = e.target.closest(".time-division");
+  if (!division) {
+    // May be clicking a blank staff-unit whose children are visibility:hidden
+    const unit = e.target.closest(".staff-unit");
+    if (unit) division = unit.querySelector(".time-division");
+  }
+  dragAnchorDivision = (division && division.closest(".staff-unit")) ? division : null;
+});
+
+workspace.addEventListener("mousemove", (e) => {
+  if (!dragAnchorDivision) return;
+  if (!(e.buttons & 1)) { dragAnchorDivision = null; isDragging = false; isDragStaffMode = false; return; }
+
+  const anchorUnit = dragAnchorDivision.closest(".staff-unit");
+  const allStaffUnits = Array.from(document.querySelectorAll(".staff-unit"));
+  const currentUnit = allStaffUnits.find(u => {
+    const r = u.getBoundingClientRect();
+    return e.clientX >= r.left && e.clientX <= r.right &&
+           e.clientY >= r.top  && e.clientY <= r.bottom;
+  }) ?? null;
+
+  if (isDragStaffMode) {
+    // Continue updating staff selection as cursor moves
+    const allStaff = Array.from(document.querySelectorAll(".staff-unit"));
+    const anchor = multiStaffAnchor;
+    applyMultiStaffSelection(allStaff[anchor], currentUnit);
+    multiStaffAnchor = anchor;
+    return;
+  }
+
+  if (currentUnit && currentUnit !== anchorUnit) {
+    // Crossed into a different staff unit — switch to staff drag mode
+    isDragging = true;
+    isDragStaffMode = true;
+    clearMultiDivisionSelection();
+    deselectBarline();
+    deselectSlot();
+    deselectDivision();
+    const allStaff = Array.from(document.querySelectorAll(".staff-unit"));
+    multiStaffAnchor = allStaff.indexOf(anchorUnit);
+    const anchor = multiStaffAnchor;
+    applyMultiStaffSelection(anchorUnit, currentUnit);
+    multiStaffAnchor = anchor;
+    return;
+  }
+
+  // Same unit — division drag
+  const division = e.target.closest(".time-division");
+  if (!division || division === dragAnchorDivision) return;
+  if (division.closest(".staff-unit") !== anchorUnit) return;
+  isDragging = true;
+  clearMultiStaffSelection();
+  deselectBarline();
+  deselectSlot();
+  deselectDivision();
+  applyMultiDivisionSelection(
+    anchorUnit,
+    Number(dragAnchorDivision.dataset.timeIndex),
+    Number(division.dataset.timeIndex)
+  );
 });
 
 // Select slot
@@ -320,6 +522,20 @@ function selectDivision(division) {
   if (!division || selectedDivision === division) return;
 
   deselectDivision();
+
+  const newStaffUnit = division.closest(".staff-unit");
+
+  // Clear slot if it belongs to a different staff unit than the incoming division
+  if (selectedSlot && selectedSlot.closest(".staff-unit") !== newStaffUnit) {
+    deselectSlot();
+  }
+
+  if (newStaffUnit && newStaffUnit !== selectedStaffUnit) {
+    if (selectedStaffUnit) selectedStaffUnit.classList.remove("selected-unit");
+    selectedStaffUnit = newStaffUnit;
+    selectedStaffUnit.classList.add("selected-unit");
+    updateBlankButton();
+  }
 
   selectedDivision = division;
   division.classList.add("selected");
@@ -342,6 +558,64 @@ function deselectDivision() {
 function deselectAll() {
   deselectSlot();
   deselectDivision();
+}
+
+function clearMultiDivisionSelection() {
+  if (!multiDivisionSelection) return;
+  const { staffUnit, startIndex, endIndex } = multiDivisionSelection;
+  const lo = Math.min(startIndex, endIndex);
+  const hi = Math.max(startIndex, endIndex);
+  staffUnit.querySelectorAll(".time-division").forEach(div => {
+    if (Number(div.dataset.timeIndex) >= lo && Number(div.dataset.timeIndex) <= hi) {
+      div.classList.remove("selected");
+    }
+  });
+  multiDivisionSelection = null;
+  multiDivisionAnchor = null;
+  // Restore the anchor division's highlight if it is still the active single selection
+  if (selectedDivision) selectedDivision.classList.add("selected");
+}
+
+function clearMultiStaffSelection() {
+  if (!multiStaffSelection) return;
+  const { startUnit, endUnit } = multiStaffSelection;
+  const allStaff = Array.from(document.querySelectorAll(".staff-unit"));
+  const lo = Math.min(allStaff.indexOf(startUnit), allStaff.indexOf(endUnit));
+  const hi = Math.max(allStaff.indexOf(startUnit), allStaff.indexOf(endUnit));
+  for (let i = lo; i <= hi; i++) {
+    allStaff[i]?.querySelector(".staff-section")?.classList.remove("selected");
+    allStaff[i]?.classList.remove("selected-unit");
+  }
+  multiStaffSelection = null;
+  multiStaffAnchor = null;
+  updateBlankButton();
+}
+
+function applyMultiDivisionSelection(staffUnit, startIndex, endIndex) {
+  clearMultiDivisionSelection();
+  multiDivisionSelection = { staffUnit, startIndex, endIndex };
+  const lo = Math.min(startIndex, endIndex);
+  const hi = Math.max(startIndex, endIndex);
+  staffUnit.querySelectorAll(".time-division").forEach(div => {
+    const idx = Number(div.dataset.timeIndex);
+    div.classList.toggle("selected", idx >= lo && idx <= hi);
+  });
+}
+
+function applyMultiStaffSelection(startUnit, endUnit) {
+  clearMultiStaffSelection();
+  multiStaffSelection = { startUnit, endUnit };
+  const allStaff = Array.from(document.querySelectorAll(".staff-unit"));
+  const lo = Math.min(allStaff.indexOf(startUnit), allStaff.indexOf(endUnit));
+  const hi = Math.max(allStaff.indexOf(startUnit), allStaff.indexOf(endUnit));
+  for (let i = lo; i <= hi; i++) {
+    const unit = allStaff[i];
+    if (!unit) continue;
+    unit.querySelector(".staff-section")?.classList.add("selected");
+    unit.classList.add("selected-unit");
+    unit.querySelectorAll(".time-division").forEach(div => div.classList.remove("selected"));
+  }
+  updateBlankButton();
 }
 
 function selectBarline(staffUnit, posIndex) {
@@ -370,8 +644,45 @@ const stringNum = currentSlot
   : null;
 
 document.addEventListener("keydown", (e) => {
+  // Lyric line cross-unit navigation (ArrowUp from line 1, ArrowDown from line 3)
+  const active = document.activeElement;
+  if (active && active.classList.contains("lyric-line")) {
+    const lineNum = parseInt(active.dataset.line);
+    const lyricUnit = active.closest(".lyric-unit");
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      if (lineNum === 3) {
+        navigateFromLyricDown(lyricUnit);
+      } else {
+        lyricUnit.querySelector(`.lyric-line[data-line="${lineNum + 1}"]`)?.focus();
+      }
+      return;
+    }
+
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      if (lineNum === 1) {
+        navigateFromLyricUp(lyricUnit);
+      } else {
+        lyricUnit.querySelector(`.lyric-line[data-line="${lineNum - 1}"]`)?.focus();
+      }
+      return;
+    }
+
+    // ArrowLeft/ArrowRight and all other keys: default browser behaviour
+    return;
+  }
+
   // Bypass header block
   if (isTypingInHeader()) return;
+
+  // Multi-selection clear
+  if ((e.key === "Backspace" || e.key === "Delete") && (multiDivisionSelection || multiStaffSelection)) {
+    e.preventDefault();
+    handleMultiClear();
+    return;
+  }
 
   const navKeys = ["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"];
   if (navKeys.includes(e.key) && (selectedSlot || selectedDivision)) {
@@ -383,7 +694,11 @@ document.addEventListener("keydown", (e) => {
     case "ArrowDown": moveVertical(-1); break;
     case "ArrowLeft": moveHorizontal(-1); break;
     case "ArrowRight": moveHorizontal(+1); break;
-    case "Escape": deselectAll(); break;
+    case "Escape":
+      deselectAll();
+      clearMultiDivisionSelection();
+      clearMultiStaffSelection();
+      break;
   }
 });
 
@@ -401,6 +716,61 @@ function moveVertical(direction) {
 
   if (targetSlot) {
     selectSlot(targetSlot);
+    return;
+  }
+
+  // String edge reached — cross-unit navigation
+  const currentStaffUnit = division.closest(".staff-unit");
+  if (!currentStaffUnit) return;
+
+  const allUnits = getAllSelectableUnits();
+  const currentUnitIndex = allUnits.indexOf(currentStaffUnit);
+  const timeIndex = Number(division.dataset.timeIndex);
+
+  if (direction > 0) {
+    // Moving up from string 3 — find previous selectable unit
+    for (let i = currentUnitIndex - 1; i >= 0; i--) {
+      const unit = allUnits[i];
+      if (unit.classList.contains("staff-unit")) {
+        const layer = unit.querySelector(".notation-layer");
+        const targetDiv = layer?.querySelector(`.time-division[data-time-index="${timeIndex}"]`);
+        const slot = targetDiv?.querySelector('.string-slot[data-string="3"]');
+        if (slot) selectSlot(slot);
+        return;
+      }
+      if (unit.classList.contains("lyric-unit")) {
+        const line = unit.querySelector('.lyric-line[data-line="3"]');
+        if (line) {
+          deselectAll();
+          if (selectedStaffUnit) { selectedStaffUnit.classList.remove("selected-unit"); selectedStaffUnit = null; }
+          line.focus();
+          updateBlankButton();
+        }
+        return;
+      }
+    }
+  } else {
+    // Moving down from string 1 — find next selectable unit
+    for (let i = currentUnitIndex + 1; i < allUnits.length; i++) {
+      const unit = allUnits[i];
+      if (unit.classList.contains("staff-unit")) {
+        const layer = unit.querySelector(".notation-layer");
+        const targetDiv = layer?.querySelector(`.time-division[data-time-index="${timeIndex}"]`);
+        const slot = targetDiv?.querySelector('.string-slot[data-string="1"]');
+        if (slot) selectSlot(slot);
+        return;
+      }
+      if (unit.classList.contains("lyric-unit")) {
+        const line = unit.querySelector('.lyric-line[data-line="1"]');
+        if (line) {
+          deselectAll();
+          if (selectedStaffUnit) { selectedStaffUnit.classList.remove("selected-unit"); selectedStaffUnit = null; }
+          line.focus();
+          updateBlankButton();
+        }
+        return;
+      }
+    }
   }
 }
 
@@ -415,29 +785,230 @@ function moveHorizontal(direction) {
     `.time-division[data-time-index="${index + direction}"]`
   );
 
-  if (!targetDivision) return;
+  if (targetDivision) {
+    if (selectedSlot) {
+      const stringNum = selectedSlot.dataset.string;
+      const targetSlot = targetDivision.querySelector(
+        `.string-slot[data-string="${stringNum}"]`
+      );
+      if (targetSlot) {
+        selectSlot(targetSlot);
+        return;
+      }
+    }
+    selectDivision(targetDivision);
+    return;
+  }
 
-  // If a slot was selected, preserve string
-  if (selectedSlot) {
-    const stringNum = selectedSlot.dataset.string;
-    const targetSlot = targetDivision.querySelector(
-      `.string-slot[data-string="${stringNum}"]`
+  // Edge reached — find the immediately adjacent selectable unit
+  const currentStaffUnit = layer.closest(".staff-unit");
+  if (!currentStaffUnit) return;
+
+  const allUnits = getAllSelectableUnits();
+  const currentUnitIndex = allUnits.indexOf(currentStaffUnit);
+  const adjacentIndex = currentUnitIndex + direction;
+
+  if (adjacentIndex < 0 || adjacentIndex >= allUnits.length) return;
+
+  const adjacentUnit = allUnits[adjacentIndex];
+
+  if (adjacentUnit.classList.contains("lyric-unit")) {
+    const lineNum = direction > 0 ? 1 : 3;
+    const line = adjacentUnit.querySelector(`.lyric-line[data-line="${lineNum}"]`);
+    if (line) {
+      deselectAll();
+      if (selectedStaffUnit) { selectedStaffUnit.classList.remove("selected-unit"); selectedStaffUnit = null; }
+      line.focus();
+      updateBlankButton();
+    }
+    return;
+  }
+
+  if (adjacentUnit.classList.contains("staff-unit")) {
+    const targetTimeIndex = direction > 0 ? 0 : 31;
+    const adjacentLayer = adjacentUnit.querySelector(".notation-layer");
+    if (!adjacentLayer) return;
+
+    const adjacentDivision = adjacentLayer.querySelector(
+      `.time-division[data-time-index="${targetTimeIndex}"]`
     );
+    if (!adjacentDivision) return;
 
-    if (targetSlot) {
-      selectSlot(targetSlot);
+    if (selectedSlot) {
+      const stringNum = selectedSlot.dataset.string;
+      const targetSlot = adjacentDivision.querySelector(
+        `.string-slot[data-string="${stringNum}"]`
+      );
+      if (targetSlot) {
+        selectSlot(targetSlot);
+        return;
+      }
+    }
+
+    selectDivision(adjacentDivision);
+  }
+}
+
+function getAllSelectableUnits() {
+  return Array.from(document.querySelectorAll(".staff-unit, .lyric-unit"));
+}
+
+function navigateFromLyricDown(lyricUnit) {
+  const allUnits = getAllSelectableUnits();
+  const currentIndex = allUnits.indexOf(lyricUnit);
+
+  for (let i = currentIndex + 1; i < allUnits.length; i++) {
+    const unit = allUnits[i];
+    if (unit.classList.contains("staff-unit")) {
+      document.activeElement?.blur();
+      const layer = unit.querySelector(".notation-layer");
+      const div = layer?.querySelector('.time-division[data-time-index="0"]');
+      const slot = div?.querySelector('.string-slot[data-string="3"]');
+      if (slot) selectSlot(slot);
+      return;
+    }
+    if (unit.classList.contains("lyric-unit")) {
+      const line = unit.querySelector('.lyric-line[data-line="1"]');
+      if (line) {
+        if (selectedStaffUnit) { selectedStaffUnit.classList.remove("selected-unit"); selectedStaffUnit = null; }
+        line.focus();
+        updateBlankButton();
+      }
       return;
     }
   }
-
-  // Otherwise, just select the division
-  selectDivision(targetDivision);
 }
 
-/*  
+function navigateFromLyricUp(lyricUnit) {
+  const allUnits = getAllSelectableUnits();
+  const currentIndex = allUnits.indexOf(lyricUnit);
+  const lastTimeIndex = selectedDivision ? Number(selectedDivision.dataset.timeIndex) : 0;
+
+  for (let i = currentIndex - 1; i >= 0; i--) {
+    const unit = allUnits[i];
+    if (unit.classList.contains("staff-unit")) {
+      document.activeElement?.blur();
+      const layer = unit.querySelector(".notation-layer");
+      let div = layer?.querySelector(`.time-division[data-time-index="${lastTimeIndex}"]`);
+      if (!div) div = layer?.querySelector('.time-division[data-time-index="0"]');
+      const slot = div?.querySelector('.string-slot[data-string="1"]');
+      if (slot) selectSlot(slot);
+      return;
+    }
+    if (unit.classList.contains("lyric-unit")) {
+      const line = unit.querySelector('.lyric-line[data-line="3"]');
+      if (line) {
+        if (selectedStaffUnit) { selectedStaffUnit.classList.remove("selected-unit"); selectedStaffUnit = null; }
+        line.focus();
+        updateBlankButton();
+      }
+      return;
+    }
+  }
+}
+
+function handleMultiClear() {
+  if (multiDivisionSelection) {
+    const { staffUnit, startIndex, endIndex } = multiDivisionSelection;
+    const lo = Math.min(startIndex, endIndex);
+    const hi = Math.max(startIndex, endIndex);
+    staffUnit.querySelectorAll(".time-division").forEach(div => {
+      if (Number(div.dataset.timeIndex) >= lo && Number(div.dataset.timeIndex) <= hi) {
+        commitClearDivision(div);
+      }
+    });
+    clearMultiDivisionSelection();
+    return;
+  }
+  if (multiStaffSelection) {
+    const { startUnit, endUnit } = multiStaffSelection;
+    const allStaff = Array.from(document.querySelectorAll(".staff-unit"));
+    const lo = Math.min(allStaff.indexOf(startUnit), allStaff.indexOf(endUnit));
+    const hi = Math.max(allStaff.indexOf(startUnit), allStaff.indexOf(endUnit));
+    for (let i = lo; i <= hi; i++) {
+      if (allStaff[i]) clearStaffUnitContent(allStaff[i]);
+    }
+    clearMultiStaffSelection();
+  }
+}
+
+function handleCopy() {
+  if (multiDivisionSelection) {
+    const { staffUnit, startIndex, endIndex } = multiDivisionSelection;
+    const lo = Math.min(startIndex, endIndex);
+    const hi = Math.max(startIndex, endIndex);
+    const data = Array.from(staffUnit.querySelectorAll(".time-division"))
+      .filter(div => {
+        const idx = Number(div.dataset.timeIndex);
+        return idx >= lo && idx <= hi;
+      })
+      .map(serializeTimeDivision);
+    clipboard = { type: "divisions", data };
+    return;
+  }
+  if (multiStaffSelection) {
+    const { startUnit, endUnit } = multiStaffSelection;
+    const allStaff = Array.from(document.querySelectorAll(".staff-unit"));
+    const lo = Math.min(allStaff.indexOf(startUnit), allStaff.indexOf(endUnit));
+    const hi = Math.max(allStaff.indexOf(startUnit), allStaff.indexOf(endUnit));
+    clipboard = { type: "staffUnits", data: allStaff.slice(lo, hi + 1).map(serializeStaffUnit) };
+    return;
+  }
+  if (selectedDivision) {
+    clipboard = { type: "divisions", data: [serializeTimeDivision(selectedDivision)] };
+  }
+}
+
+function handlePaste() {
+  if (!clipboard) return;
+
+  if (clipboard.type === "divisions") {
+    if (!selectedDivision) return;
+    const layer = selectedDivision.closest(".notation-layer");
+    if (!layer) return;
+    const startIdx = Number(selectedDivision.dataset.timeIndex);
+    const available = 32 - startIdx;
+    if (clipboard.data.length > available) {
+      alert(`Not enough space: copied ${clipboard.data.length} divisions but only ${available} available from this position.`);
+      return;
+    }
+    const allDivisions = Array.from(layer.querySelectorAll(".time-division"));
+    clipboard.data.forEach((divData, i) => {
+      const target = allDivisions.find(d => Number(d.dataset.timeIndex) === startIdx + i);
+      if (target) { clearDivisionFully(target); restoreTimeDivision(target, divData); }
+    });
+    const staffUnit = layer.closest(".staff-unit");
+    if (staffUnit) renderArcLayer(staffUnit);
+    return;
+  }
+
+  if (clipboard.type === "staffUnits") {
+    if (!selectedStaffUnit) return;
+    const allStaff = Array.from(document.querySelectorAll(".staff-unit"));
+    const startIdx = allStaff.indexOf(selectedStaffUnit);
+    const available = allStaff.length - startIdx;
+    if (clipboard.data.length > available) {
+      alert(`Not enough space: copied ${clipboard.data.length} staff units but only ${available} available from this position.`);
+      return;
+    }
+    const targets = allStaff.slice(startIdx, startIdx + clipboard.data.length);
+    const hasNotation = targets.some(unit =>
+      Array.from(unit.querySelectorAll(".time-division")).some(div =>
+        Object.keys(serializeTimeDivision(div)).length > 0
+      )
+    );
+    if (hasNotation && !confirm("This will overwrite existing notation. Continue?")) return;
+    targets.forEach((unit, i) => {
+      clearStaffUnitContent(unit);
+      restoreStaffUnit(unit, clipboard.data[i]);
+    });
+  }
+}
+
+/*
 ======================================================
   Input Layer - palette & keyboard handling
-======================================================  
+======================================================
 */
 
 // Palette
@@ -466,6 +1037,18 @@ let lastFingerDivision = null;
 
 document.addEventListener("keydown", (e) => {
   if (isTypingInHeader()) return;
+
+  if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
+    e.preventDefault();
+    undoHistory();
+    return;
+  }
+  if ((e.ctrlKey || e.metaKey) && (e.key === "y" || (e.key === "z" && e.shiftKey))) {
+    e.preventDefault();
+    redoHistory();
+    return;
+  }
+
   if (!selectedSlot && !selectedDivision) return;
 
   const intent = keyToIntent(e);
@@ -526,33 +1109,21 @@ document.addEventListener("keydown", (e) => {
   // Suri and oshibachi handling
 
   if (intent.action === "suri") {
-    if (!selectedSlot) return;
-
-    const division = selectedSlot.closest(".time-division");
-    if (!division) return;
-    const string = selectedSlot.dataset.string;
-    console.log("Input level string:", string);
-
+    if (!selectedSlot && !selectedDivision) return;
     dispatchCommit({
       source: "keyboard",
       action: "suri",
-      value: string
-    });;
+      value: selectedSlot ? selectedSlot.dataset.string : null
+    });
     return;
   }
 
   if (intent.action === "oshibachi") {
-    if (!selectedSlot) return;
-
-    const division = selectedSlot.closest(".time-division");
-    if (!division) return;
-
-    const string = selectedSlot.dataset.string;
-
+    if (!selectedSlot && !selectedDivision) return;
     dispatchCommit({
       source: "keyboard",
       action: "oshibachi",
-      value: string
+      value: selectedSlot ? selectedSlot.dataset.string : null
     });
     return;
   }
@@ -731,11 +1302,20 @@ function handlePaletteInput(btn) {
     lastFingerDivision = selectedDivision;
   }
 
+  // Copy / Paste from palette
+  if (action === "editing") {
+    if (value === "copy")  handleCopy();
+    if (value === "paste") handlePaste();
+    return;
+  }
+
+  if (action === "great-staff-add")    { commitGreatStaffAdd();    return; }
+  if (action === "great-staff-remove") { commitGreatStaffRemove(); return; }
+  if (action === "toggle-blank")       { commitToggleBlank();       return; }
+
   // Suri and Oshibachi
   if (action === "suri" || action === "oshibachi") {
-    if (!selectedSlot) return;
-
-    value = selectedSlot.dataset.string; 
+    value = selectedSlot ? selectedSlot.dataset.string : null;
   }
 
   dispatchCommit({
@@ -754,9 +1334,8 @@ function handlePaletteInput(btn) {
 ======================================================  
 */
 function dispatchCommit(intent) {
-  console.log("DISPATCH:", intent); // debugging only
+  console.log("DISPATCH:", intent);
 
-  // "measure" only needs a selected staff unit, not a division
   if (intent.action === "measure") {
     const bars = parseInt(intent.value);
     if (!isNaN(bars)) {
@@ -766,21 +1345,21 @@ function dispatchCommit(intent) {
       }
       setStaffBars(selectedStaffUnit, bars);
     }
+    pushHistory();
     return;
   }
 
   if (intent.action === "barline-type") {
     commitBarlineType(intent.value);
+    pushHistory();
     return;
   }
 
   if (!selectedDivision) return;
 
-  // Disabled triplet divisions block all input except triplet toggle-off
   if (selectedDivision.dataset.triplet === "disabled" && intent.action !== "triplet") return;
 
   switch (intent.action) {
-    // --- Tsubo ---
     case "tsubo":
       if (!selectedSlot) return;
       commitTsubo(selectedSlot, intent.value);
@@ -790,7 +1369,6 @@ function dispatchCommit(intent) {
       commitRest(selectedDivision);
       break;
 
-    // --- Duration ---
     case "durationDot":
       commitDurationDot(selectedDivision);
       break;
@@ -799,7 +1377,6 @@ function dispatchCommit(intent) {
       commitDurationUnderline(selectedDivision, intent.value);
       break;
 
-    // --- Techniques ---
     case "technique":
       commitTechnique(selectedDivision, intent.value);
       break;
@@ -829,26 +1406,21 @@ function dispatchCommit(intent) {
       break;
 
     case "suri":
-      if (!selectedSlot) return;
       commitTechArc(selectedDivision, "suri", intent.value);
       break;
 
     case "oshibachi":
-      if (!selectedSlot) return;
       commitTechArc(selectedDivision, "oshibachi", intent.value);
       break;
-
 
     case "triplet":
       commitTriplet(selectedDivision);
       break;
 
-    // --- Finger ---
     case "finger":
       commitFinger(selectedDivision, intent.value);
       break;
 
-    // --- Clear functions ---
     case "clear":
       if (selectedDivision.dataset.triplet) {
         commitTriplet(selectedDivision);
@@ -858,16 +1430,18 @@ function dispatchCommit(intent) {
         commitClearDivision(selectedDivision);
       }
       break;
+      
 
     case "deselect":
       deselectAll();
-      break;
-
+      return; // deselect doesn't change document state, skip pushHistory
 
     default:
       console.warn("Unknown action:", intent);
+      return;
   }
-  // renderTechArcs();
+
+  pushHistory();
 }
 
 /*  
@@ -893,6 +1467,65 @@ function commitImmediateTsubo(slot, value) {
 
 function commitTsubo(slot, value) {
   commitImmediateTsubo(slot, value);
+
+  const division = slot.closest(".time-division");
+  const layer    = division?.closest(".notation-layer");
+  const staffUnit = division?.closest(".staff-unit");
+  if (!layer || !staffUnit) return;
+
+  const divisions = Array.from(layer.querySelectorAll(".time-division"));
+  const divIndex  = divisions.indexOf(division);
+  let needsRender = false;
+
+  // Case 0: armed with no string yet — claim this slot's string as the start
+  if (division.dataset.techArcArmed && !division.dataset.techArcString) {
+    console.log("Case 0 fired", division.dataset.techArcArmed, slot.dataset.string);
+    division.dataset.techArcString = slot.dataset.string;
+    needsRender = true;
+  }
+
+  // Case 1: this division is armed and this slot is its start
+  if (division.dataset.techArcArmed && slot.dataset.string === division.dataset.techArcString) {
+    const armedType   = division.dataset.techArcArmed;
+    const armedString = division.dataset.techArcString;
+    const targetString = armedType === "oshibachi" ? Number(armedString) + 1 : Number(armedString);
+    console.log("Case 1 fired", armedType, armedString, "targetString:", targetString);
+    for (let i = divIndex + 1; i < divisions.length; i++) {
+      const targetSlot = divisions[i].querySelector(`.string-slot[data-string="${targetString}"].has-tsubo`);
+      if (targetSlot) {
+        console.log("Case 1 RESOLVED, offset:", i - divIndex);
+        division.dataset.techArc       = armedType;
+        division.dataset.techArcString = armedString;
+        division.dataset.techArcOffset = String(i - divIndex);
+        delete division.dataset.techArcArmed;
+        needsRender = true;
+        break;
+      }
+    }
+    if (!needsRender) needsRender = true; // attempted but unresolved — still may need redraw
+  }
+
+  // Case 2: this slot may be the target of an earlier armed division
+  const slotString = slot.dataset.string;
+  for (let i = divIndex - 1; i >= 0; i--) {
+    const earlyDiv = divisions[i];
+    if (!earlyDiv.dataset.techArcArmed) continue;
+    const armedType   = earlyDiv.dataset.techArcArmed;
+    const armedString = earlyDiv.dataset.techArcString;
+    const targetString = armedType === "oshibachi" ? Number(armedString) + 1 : Number(armedString);
+    console.log("Case 2 fired", armedType, armedString, "targetString:", targetString, "slotString:", slotString);
+    if (String(targetString) === slotString) {
+      console.log("Case 2 RESOLVED, offset:", divIndex - i);
+      earlyDiv.dataset.techArc       = armedType;
+      earlyDiv.dataset.techArcString = armedString;
+      earlyDiv.dataset.techArcOffset = String(divIndex - i);
+      delete earlyDiv.dataset.techArcArmed;
+      needsRender = true;
+      break;
+    }
+  }
+
+  if (needsRender) renderArcLayer(staffUnit);
 }
 
 function commitRest(division) {
@@ -1081,99 +1714,73 @@ function commitHa(division) {
 
 function commitTechArc(division, type, string) {
   if (!division) return;
-  console.log("commitTechArc reached"); // debugging
-  console.log("division:", division); // debugging
-  console.log("type:", type); // debugging
-  console.log("string:", string); // debugging
 
   // --- Toggle off ---
-  if (division.dataset.techArc === type) {
+  if (division.dataset.techArc === type || division.dataset.techArcArmed === type) {
     delete division.dataset.techArc;
     delete division.dataset.techArcString;
     delete division.dataset.techArcOffset;
-
-    renderTechArcs();
-
+    delete division.dataset.techArcArmed;
+    const staffUnit = division.closest(".staff-unit");
+    if (staffUnit) renderArcLayer(staffUnit);
     return;
   }
 
-  console.log("checkpoint 1 - after toggle off"); // debugging
-  console.log("string value:", string, typeof string);
-
-
-  // --- Require start slot with tsubo ---
-  const slots = division.querySelectorAll(".string-slot");
-
-  console.log("DEBUG slots in division:", slots.length);
-
-  slots.forEach(slot => {
-    console.log({
-      stringArg: string,
-      slotString: slot.dataset.string,
-      hasTsuboClass: slot.classList.contains("has-tsubo"),
-      classList: [...slot.classList],
-      text: slot.textContent.trim(),
-      slot
-    });
-  });
-
-  const startSlot = [...slots].find(
-    slot =>
-      slot.dataset.string === String(string) &&
-      slot.classList.contains("has-tsubo")
-  );
-
-  console.log("RESOLVED startSlot:", startSlot);
-
-  if (!startSlot) return;
-
-
-  console.log("checkpoint 2 - declare startSlot", startSlot); // debugging
+  // --- Arm with no string (flow A: suri/oshi clicked before any tsubo) ---
+  if (string == null) {
+    console.log("ARMING with no string:", type);
+    division.dataset.techArcArmed = type;
+    delete division.dataset.techArcString;
+    const staffUnit = division.closest(".staff-unit");
+    if (staffUnit) renderArcLayer(staffUnit);
+    return;
+  }
 
   const layer = division.closest(".notation-layer");
   if (!layer) return;
-
-  const divisions = Array.from(
-    layer.querySelectorAll(".time-division")
-  );
-
+  const staffUnit = division.closest(".staff-unit");
+  const divisions = Array.from(layer.querySelectorAll(".time-division"));
   const startIndex = divisions.indexOf(division);
   if (startIndex === -1) return;
 
-  console.log("startIndex:", startIndex);  // debugging
+  // --- Try to resolve immediately ---
+  const startSlot = [...division.querySelectorAll(".string-slot")].find(
+    slot => slot.dataset.string === String(string) && slot.classList.contains("has-tsubo")
+  );
 
-  // --- Find target ---
-  let targetDivision = null;
+  if (startSlot) {
+    const targetString = type === "oshibachi" ? Number(string) + 1 : Number(string);
+    for (let i = startIndex + 1; i < divisions.length; i++) {
+      const slot = divisions[i].querySelector(`.string-slot[data-string="${targetString}"].has-tsubo`);
+      if (slot) {
+        const offset = i - startIndex;
+        console.log("RESOLVED immediately:", type, string, offset);
+        division.dataset.techArc       = type;
+        division.dataset.techArcString = String(string);
+        division.dataset.techArcOffset = String(offset);
+        delete division.dataset.techArcArmed;
+        if (staffUnit) renderArcLayer(staffUnit);
+        return;
+      }
+    }
+  }
 
+  // --- Arm ---
+  console.log("ARMING with string:", type, string);
+  division.dataset.techArcArmed  = type;
+  division.dataset.techArcString = String(string);
+
+  // Partial resolution: store offset to nearest real target tsubo if one exists
+  const partialTargetString = type === "oshibachi" ? Number(string) + 1 : Number(string);
   for (let i = startIndex + 1; i < divisions.length; i++) {
-    const div = divisions[i];
-
-    const targetString =
-      type === "oshibachi" ? Number(string) + 1 : Number(string);
-
-    const slot = div.querySelector(
-      `.string-slot[data-string="${targetString}"].has-tsubo`
-    );
-
+    const slot = divisions[i].querySelector(`.string-slot[data-string="${partialTargetString}"].has-tsubo`);
     if (slot) {
-      targetDivision = div;
+      division.dataset.techArcOffset = String(i - startIndex);
       break;
     }
   }
 
-  if (!targetDivision) return;
-
-  const offset = divisions.indexOf(targetDivision) - startIndex;
-  if (offset <= 0) return;
-
-  console.log("offset:", offset);
-
-  // --- Store ---
-  division.dataset.techArc = type;               // "suri" | "oshibachi"
-  division.dataset.techArcString = String(string);
-  division.dataset.techArcOffset = String(offset);
-
-  renderTechArcs();
+  if (staffUnit) renderArcLayer(staffUnit);
 }
 
 
@@ -1267,6 +1874,46 @@ function renderArcLayer(staffBlock) {
     const start = getSlotAnchor(startSlot);
     const end   = getSlotAnchor(targetSlot);
     if (!start || !end) return;
+
+    drawArc(svg, start, end, type);
+  });
+
+  // --- Armed arcs (placeholder until fully resolved) ---
+  divisions.forEach((division, startIndex) => {
+    const type = division.dataset.techArcArmed;
+    if (!type) return;
+
+    const string = division.dataset.techArcString;
+
+    // Start anchor: has-tsubo slot preferred, else bare string slot
+    let start = null;
+    if (string) {
+      const startSlot = division.querySelector(`.string-slot[data-string="${string}"].has-tsubo`)
+                     || division.querySelector(`.string-slot[data-string="${string}"]`);
+      if (startSlot) start = getSlotAnchor(startSlot);
+    }
+    if (!start) return;
+
+    // Target anchor: stored interim offset slot, or bare slot on next division
+    const targetString = type === "oshibachi" ? Number(string) + 1 : Number(string);
+    let end = null;
+    const offset = division.dataset.techArcOffset ? Number(division.dataset.techArcOffset) : 0;
+
+    if (offset > 0) {
+      const targetDiv = divisions[startIndex + offset];
+      if (targetDiv) {
+        const targetSlot = targetDiv.querySelector(`.string-slot[data-string="${targetString}"].has-tsubo`);
+        if (targetSlot) end = getSlotAnchor(targetSlot);
+      }
+    }
+    if (!end) {
+      const nextDiv = divisions[startIndex + 1];
+      if (!nextDiv) return;
+      const nextSlot = nextDiv.querySelector(`.string-slot[data-string="${targetString}"]`);
+      if (!nextSlot) return;
+      end = getSlotAnchor(nextSlot);
+    }
+    if (!end) return;
 
     drawArc(svg, start, end, type);
   });
@@ -1391,12 +2038,30 @@ function commitClearSlot(slot) {
 
   if (!division) return;
 
+  // If the cleared slot was the start of a resolved arc, revert to armed
+  if (division.dataset.techArc && division.dataset.techArcString === slot.dataset.string) {
+    division.dataset.techArcArmed = division.dataset.techArc;
+    delete division.dataset.techArc;
+    delete division.dataset.techArcOffset;
+    // keep techArcString so the placeholder knows which string to use
+    const staffUnit = division.closest(".staff-unit");
+    if (staffUnit) renderArcLayer(staffUnit);
+  }
+
   // If no tsubo remain in this division, clear duration
   const slots = Array.from(getStringSlots(division));
   const hasAnyTsubo = slots.some(s => s.textContent !== "");
 
   if (!hasAnyTsubo) {
     commitClearDuration(division);
+  }
+
+  if (!hasAnyTsubo && division.dataset.techArcArmed) {
+    delete division.dataset.techArcArmed;
+    delete division.dataset.techArcString;
+    delete division.dataset.techArcOffset;
+    const staffUnit = division.closest(".staff-unit");
+    if (staffUnit) renderArcLayer(staffUnit);
   }
 }
 
@@ -1428,8 +2093,10 @@ function commitClearDivision(division) {
   delete division.dataset.techArc;
   delete division.dataset.techArcString;
   delete division.dataset.techArcOffset;
+  delete division.dataset.techArcArmed;
 
-  renderTechArcs();
+  const staffUnit = division.closest(".staff-unit");
+  if (staffUnit) renderArcLayer(staffUnit);
 
 }
 
@@ -1492,11 +2159,20 @@ function drawBarlines(staffBlock) {
   const thickOff = thin / 2 + gap + thick / 2;   // 0.15 + 0.6 + 0.3 = 1.05mm
   const dotOff   = thin / 2 + gap + dotR;         // 0.15 + 0.6 + 0.3 = 1.05mm
 
+  const greatStaff = staffBlock.dataset.greatStaff;
+
   data.forEach((bar, i) => {
     const x = (bar.pos / 32) * 180;
     const type = bar.type || "normal";
     const isSelected = isSelectedUnit && selectedBarline.posIndex === i;
     const color = isSelected ? "dodgerblue" : "#d3d3d3";
+
+    // Extend endpoint barlines for great staff grouping
+    let y1 = 6, y2 = 14;
+    if (greatStaff && (bar.pos === 0 || bar.pos === 32)) {
+      if (greatStaff === "end"    || greatStaff === "middle") y1 = 0;
+      if (greatStaff === "start"  || greatStaff === "middle") y2 = 25;
+    }
 
     const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
     g.classList.add("barline-group");
@@ -1516,14 +2192,14 @@ function drawBarlines(staffBlock) {
     switch (type) {
       case "stop":
         // thin (anchor) → gap → thick (right)
-        g.appendChild(makeLine(x,             6, 14, color, `${thin}mm`));
-        g.appendChild(makeLine(x + thickOff,  6, 14, color, `${thick}mm`));
+        g.appendChild(makeLine(x,             y1, y2, color, `${thin}mm`));
+        g.appendChild(makeLine(x + thickOff,  y1, y2, color, `${thick}mm`));
         break;
 
       case "open-repeat":
         // thick (left) → gap → thin (anchor) → gap → dots (right)
-        g.appendChild(makeLine(x - thickOff,  6, 14, color, `${thick}mm`));
-        g.appendChild(makeLine(x,             6, 14, color, `${thin}mm`));
+        g.appendChild(makeLine(x - thickOff,  y1, y2, color, `${thick}mm`));
+        g.appendChild(makeLine(x,             y1, y2, color, `${thin}mm`));
         g.appendChild(makeCircle(x + dotOff,  8,  dotR, color));
         g.appendChild(makeCircle(x + dotOff, 12,  dotR, color));
         break;
@@ -1532,13 +2208,13 @@ function drawBarlines(staffBlock) {
         // dots (left) → gap → thin (anchor) → gap → thick (right)
         g.appendChild(makeCircle(x - dotOff,  8,  dotR, color));
         g.appendChild(makeCircle(x - dotOff, 12,  dotR, color));
-        g.appendChild(makeLine(x,             6, 14, color, `${thin}mm`));
-        g.appendChild(makeLine(x + thickOff,  6, 14, color, `${thick}mm`));
+        g.appendChild(makeLine(x,             y1, y2, color, `${thin}mm`));
+        g.appendChild(makeLine(x + thickOff,  y1, y2, color, `${thick}mm`));
         break;
 
       case "normal":
       default:
-        g.appendChild(makeLine(x, 6, 14, color, `${thin}mm`));
+        g.appendChild(makeLine(x, y1, y2, color, `${thin}mm`));
         break;
     }
 
@@ -1659,6 +2335,100 @@ function commitBarlineType(type) {
   staffUnit.dataset.barlines = JSON.stringify(barlines);
   selectedBarline = null;
   drawBarlines(staffUnit);
+}
+
+function commitGreatStaffAdd() {
+  if (!multiStaffSelection) return;
+  const { startUnit, endUnit } = multiStaffSelection;
+  const allStaff = Array.from(document.querySelectorAll(".staff-unit"));
+  const lo = Math.min(allStaff.indexOf(startUnit), allStaff.indexOf(endUnit));
+  const hi = Math.max(allStaff.indexOf(startUnit), allStaff.indexOf(endUnit));
+  if (lo === hi) return;
+
+  for (let i = lo; i <= hi; i++) {
+    const unit = allStaff[i];
+    if (!unit) continue;
+    delete unit.dataset.greatStaff;
+    if (i === lo)       unit.dataset.greatStaff = "start";
+    else if (i === hi)  unit.dataset.greatStaff = "end";
+    else                unit.dataset.greatStaff = "middle";
+    drawBarlines(unit);
+  }
+}
+
+function commitGreatStaffRemove() {
+  const allStaff = Array.from(document.querySelectorAll(".staff-unit"));
+
+  const selectedUnits = new Set();
+  if (selectedStaffUnit) selectedUnits.add(selectedStaffUnit);
+  if (multiStaffSelection) {
+    const { startUnit, endUnit } = multiStaffSelection;
+    const lo = Math.min(allStaff.indexOf(startUnit), allStaff.indexOf(endUnit));
+    const hi = Math.max(allStaff.indexOf(startUnit), allStaff.indexOf(endUnit));
+    for (let i = lo; i <= hi; i++) {
+      if (allStaff[i]) selectedUnits.add(allStaff[i]);
+    }
+  }
+  if (selectedUnits.size === 0) return;
+
+  // Walk all units to find contiguous great-staff groups containing a selected unit
+  const groups = [];
+  let currentGroup = null;
+  allStaff.forEach(unit => {
+    if (unit.dataset.greatStaff) {
+      if (!currentGroup) currentGroup = [];
+      currentGroup.push(unit);
+    } else {
+      if (currentGroup) { groups.push(currentGroup); currentGroup = null; }
+    }
+  });
+  if (currentGroup) groups.push(currentGroup);
+
+  groups.forEach(group => {
+    if (group.some(u => selectedUnits.has(u))) {
+      group.forEach(unit => {
+        delete unit.dataset.greatStaff;
+        drawBarlines(unit);
+      });
+    }
+  });
+}
+
+function updateBlankButton() {
+  const btn = document.querySelector('[data-action="toggle-blank"]');
+  if (!btn) return;
+  const s = STRINGS[currentLang] || STRINGS.en;
+  let firstUnit;
+  if (multiStaffSelection) {
+    const { startUnit, endUnit } = multiStaffSelection;
+    const allStaff = Array.from(document.querySelectorAll(".staff-unit"));
+    const lo = Math.min(allStaff.indexOf(startUnit), allStaff.indexOf(endUnit));
+    firstUnit = allStaff[lo];
+  } else {
+    firstUnit = selectedStaffUnit || document.activeElement?.closest('.lyric-unit');
+  }
+  btn.textContent = firstUnit?.classList.contains('blank') ? s['palette-toggle-show'] : s['palette-toggle-blank'];
+}
+
+function commitToggleBlank() {
+  if (multiStaffSelection) {
+    const { startUnit, endUnit } = multiStaffSelection;
+    const allStaff = Array.from(document.querySelectorAll(".staff-unit"));
+    const lo = Math.min(allStaff.indexOf(startUnit), allStaff.indexOf(endUnit));
+    const hi = Math.max(allStaff.indexOf(startUnit), allStaff.indexOf(endUnit));
+    const units = allStaff.slice(lo, hi + 1);
+    const makeBlank = !units[0].classList.contains('blank');
+    units.forEach(u => {
+      u.classList.toggle('blank', makeBlank);
+      if (makeBlank) { u.dataset.blank = 'true'; } else { delete u.dataset.blank; }
+    });
+  } else {
+    const unit = selectedStaffUnit || document.activeElement?.closest('.lyric-unit');
+    if (!unit) return;
+    const isBlank = unit.classList.toggle('blank');
+    if (isBlank) { unit.dataset.blank = 'true'; } else { delete unit.dataset.blank; }
+  }
+  updateBlankButton();
 }
 
 
@@ -1804,21 +2574,29 @@ function drawArc(svg, start, end, type) {
 
 /*
 ======================================================
-  Page menu wiring
+  File menu — New, Save, Open Print
 ======================================================
 */
 
-document.getElementById("add-staff-page").addEventListener("click", () => {
-  const pageNumber = document.querySelectorAll(".page").length + 1;
-  generatePage("staff", pageNumber);
-  closeAllMenus();
-});
+function newPage(type) {
+  const pages = document.querySelectorAll(".page");
+  if (pages.length > 0) {
+    if (!confirm("You have unsaved changes. Continue?")) return;
+  }
 
-document.getElementById("add-lyric-page").addEventListener("click", () => {
-  const pageNumber = document.querySelectorAll(".page").length + 1;
-  generatePage("lyric", pageNumber);
+  selectedSlot      = null;
+  selectedDivision  = null;
+  selectedStaffUnit = null;
+  selectedBarline   = null;
+  workspace.innerHTML = "";
+
+  generatePage(type, 1);
   closeAllMenus();
-});
+  resetHistory();
+}
+
+document.getElementById("new-staff-page").addEventListener("click", () => newPage("staff"));
+document.getElementById("new-lyric-page").addEventListener("click", () => newPage("lyric"));
 
 /*
 ======================================================
@@ -1885,7 +2663,14 @@ function serializeStaffUnit(block) {
     block.querySelectorAll(".time-division")
   ).map(serializeTimeDivision);
 
-  return { type: "staff-unit", bars, barlines, timeDivisions };
+  const result = { type: "staff-unit", bars, barlines, timeDivisions };
+  if (block.dataset.greatStaff) result.greatStaff = block.dataset.greatStaff;
+  const barNumberText = block.querySelector(".bar-number")?.textContent?.trim();
+  if (barNumberText) result.barNumber = barNumberText;
+  const partLabelText = block.querySelector(".part-label")?.textContent?.trim();
+  if (partLabelText) result.partLabel = partLabelText;
+  if (block.dataset.blank === 'true') result.blank = true;
+  return result;
 }
 
 function serializeTimeDivision(div) {
@@ -1923,6 +2708,10 @@ function serializeTimeDivision(div) {
     obj.techArcString = div.dataset.techArcString;
     obj.techArcOffset = div.dataset.techArcOffset;
   }
+  if (div.dataset.techArcArmed) {
+    obj.techArcArmed  = div.dataset.techArcArmed;
+    obj.techArcString = div.dataset.techArcString;
+  }
 
   // Triplet
   if (div.dataset.triplet) obj.triplet = div.dataset.triplet;
@@ -1946,7 +2735,9 @@ function serializeLyricUnit(block) {
   block.querySelectorAll(".lyric-line").forEach((line, i) => {
     if (i < 3) lines[i] = line.textContent;
   });
-  return { type: "lyric-unit", lines };
+  const result = { type: "lyric-unit", lines };
+  if (block.dataset.blank === 'true') result.blank = true;
+  return result;
 }
 
 function getFilename() {
@@ -1970,23 +2761,9 @@ function saveDocument() {
   URL.revokeObjectURL(url);
 }
 
-// Save button in File menu
-document.getElementById("save-file").addEventListener("click", () => {
-  closeAllMenus();
-  saveDocument();
-});
-
-// Ctrl+S — works even when focus is in a header field
-document.addEventListener("keydown", (e) => {
-  if (e.ctrlKey && e.key === "s") {
-    e.preventDefault();
-    saveDocument();
-  }
-});
-
 /*
 ======================================================
-  Load / Deserialise
+  Open / Deserialise
 ======================================================
 */
 
@@ -2082,6 +2859,7 @@ function loadDocument(json) {
   document.querySelectorAll(".running-header .title-field").forEach(el => {
     el.textContent = titleVal;
   });
+  if (!isRestoring) resetHistory();
 }
 
 function restoreStaffUnit(staffUnit, block) {
@@ -2096,6 +2874,12 @@ function restoreStaffUnit(staffUnit, block) {
     return obj;
   });
   staffUnit.dataset.barlines = JSON.stringify(internalBarlines);
+
+  if (block.greatStaff) {
+    staffUnit.dataset.greatStaff = block.greatStaff;
+  } else {
+    delete staffUnit.dataset.greatStaff;
+  }
   drawBarlines(staffUnit);
 
   // Restore all 32 time divisions
@@ -2106,6 +2890,19 @@ function restoreStaffUnit(staffUnit, block) {
 
   // Single pass renders both tech arcs and triplet brackets from data attributes
   renderArcLayer(staffUnit);
+
+  if (block.barNumber) {
+    const el = staffUnit.querySelector(".bar-number");
+    if (el) el.textContent = block.barNumber;
+  }
+  if (block.partLabel) {
+    const el = staffUnit.querySelector(".part-label");
+    if (el) el.textContent = block.partLabel;
+  }
+  if (block.blank) {
+    staffUnit.classList.add('blank');
+    staffUnit.dataset.blank = 'true';
+  }
 }
 
 function restoreTimeDivision(div, data) {
@@ -2143,6 +2940,9 @@ function restoreTimeDivision(div, data) {
     div.dataset.techArcString = String(data.techArcString);
     div.dataset.techArcOffset = String(data.techArcOffset);
   }
+  if (data.techArcArmed) {
+    commitTechArc(div, data.techArcArmed, data.techArcString);
+  }
 
   // 6. Triplet — set attributes and CSS classes directly; bracket drawn by renderArcLayer
   if (data.triplet) {
@@ -2160,37 +2960,25 @@ function restoreLyricUnit(unit, block) {
   unit.querySelectorAll(".lyric-line").forEach((line, i) => {
     if (i < lines.length) line.textContent = lines[i];
   });
+  if (block.blank) {
+    unit.classList.add('blank');
+    unit.dataset.blank = 'true';
+  }
 }
+
+
 
 /*
 ======================================================
-  File menu — New, Print
+  Edit menu — Undo, Redo, Copy, Paste
 ======================================================
 */
 
-function newPage(type) {
-  const pages = document.querySelectorAll(".page");
-  if (pages.length > 0) {
-    if (!confirm("You have unsaved changes. Continue?")) return;
-  }
 
-  selectedSlot      = null;
-  selectedDivision  = null;
-  selectedStaffUnit = null;
-  selectedBarline   = null;
-  workspace.innerHTML = "";
 
-  generatePage(type, 1);
-  closeAllMenus();
-}
 
-document.getElementById("new-staff-page").addEventListener("click", () => newPage("staff"));
-document.getElementById("new-lyric-page").addEventListener("click", () => newPage("lyric"));
 
-document.getElementById("print-file").addEventListener("click", () => {
-  closeAllMenus();
-  window.print();
-});
+
 
 /*
 ======================================================
@@ -2286,6 +3074,88 @@ document.getElementById("delete-page").addEventListener("click", () => {
 
 /*
 ======================================================
+  Menu wiring
+======================================================
+*/
+
+// File menu wiring
+// Save button in File menu
+document.getElementById("save-file").addEventListener("click", () => {
+  closeAllMenus();
+  saveDocument();
+});
+
+// Ctrl+S — works even when focus is in a header field
+document.addEventListener("keydown", (e) => {
+  if (e.ctrlKey && e.key === "s") {
+    e.preventDefault();
+    saveDocument();
+  }
+});
+
+// Export/Print
+document.getElementById("print-file").addEventListener("click", () => {
+  window.print();
+  closeAllMenus();
+});
+
+
+// Edit menu wiring
+// Undo / Redo buttons
+document.getElementById("edit-undo").addEventListener("click", () => {
+  undoHistory();
+  closeAllMenus();
+});
+
+document.getElementById("edit-redo").addEventListener("click", () => {
+  redoHistory();
+  closeAllMenus();
+});
+
+// Copy / Paste buttons
+document.getElementById("edit-copy").addEventListener("click", () => {
+  closeAllMenus();
+  handleCopy();
+});
+
+document.getElementById("edit-paste").addEventListener("click", () => {
+  closeAllMenus();
+  handlePaste();
+});
+
+// Ctrl/Cmd+C and Ctrl/Cmd+V for copy/paste (not active when typing in header/lyric)
+document.addEventListener("keydown", (e) => {
+  if (isTypingInHeader()) return;
+  if ((e.ctrlKey || e.metaKey) && e.key === "c") {
+    if (multiDivisionSelection || multiStaffSelection || selectedDivision) {
+      e.preventDefault();
+      handleCopy();
+    }
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key === "v") {
+    if (clipboard) {
+      e.preventDefault();
+      handlePaste();
+    }
+  }
+});
+
+// Page menu wiring
+document.getElementById("add-staff-page").addEventListener("click", () => {
+  const pageNumber = document.querySelectorAll(".page").length + 1;
+  generatePage("staff", pageNumber);
+  closeAllMenus();
+});
+
+document.getElementById("add-lyric-page").addEventListener("click", () => {
+  const pageNumber = document.querySelectorAll(".page").length + 1;
+  generatePage("lyric", pageNumber);
+  closeAllMenus();
+});
+
+
+/*
+======================================================
   Language / i18n
 ======================================================
 */
@@ -2323,7 +3193,7 @@ const STRINGS = {
     'new-lyric-page':        'Staff and Lyric Page',
     'open-file':             'Open',
     'save-file':             'Save',
-    'print-file':            'Print',
+    'print-file':            'Export / Print',
     'edit-undo':             'Undo',
     'edit-redo':             'Redo',
     'edit-copy':             'Copy',
@@ -2332,17 +3202,24 @@ const STRINGS = {
     'add-lyric-page':        'Add Staff and Lyric Page',
     'clear-page':            'Clear Page',
     'delete-page':           'Delete Page',
+    'metadata-bar-number':   'Bar',
+    'metadata-part-label':   '…',
     'palette-header-tsubo':     'Tsubo',
     'palette-header-duration':  'Duration',
     'palette-header-technique': 'Technique',
     'palette-header-finger':    'Finger',
     'palette-header-measure':   'Measure',
-    'palette-header-editing':   'Editing',
+    'palette-header-editing':      'Editing',
+    'palette-header-great-staff':  'Great staff',
+    'palette-btn-great-staff-add': 'Add great staff',
+    'palette-btn-great-staff-remove': 'Remove great staff',
     'palette-measure-0':     'Free',
     'palette-clear':         'Clear',
     'palette-copy':          'Copy',
     'palette-paste':         'Paste',
-    'watermark':             'Created with ShamiTab by ShamiWorks',
+    'palette-toggle-blank':  'Hide',
+    'palette-toggle-show':   'Show',
+    'watermark':             'Created with Shamidō by ShamiWorks',
   },
   ja: {
     'lang-toggle':           'English',
@@ -2357,7 +3234,7 @@ const STRINGS = {
     'new-lyric-page':        '譜面＋歌詞ページ',
     'open-file':             '開く',
     'save-file':             '保存',
-    'print-file':            '印刷',
+    'print-file':            'エクスポート／印刷',
     'edit-undo':             '元に戻す',
     'edit-redo':             'やり直す',
     'edit-copy':             'コピー',
@@ -2366,17 +3243,24 @@ const STRINGS = {
     'add-lyric-page':        '譜面＋歌詞ページを追加',
     'clear-page':            'ページをクリア',
     'delete-page':           'ページを削除',
+    'metadata-bar-number':   '小節',
+    'metadata-part-label':   '…',
     'palette-header-tsubo':     'ツボ',
     'palette-header-duration':  '音価',
     'palette-header-technique': '奏法',
     'palette-header-finger':    '指番号',
     'palette-header-measure':   '小節',
-    'palette-header-editing':   '編集',
+    'palette-header-editing':      '編集',
+    'palette-header-great-staff':  '連合譜',
+    'palette-btn-great-staff-add': '連合譜を追加',
+    'palette-btn-great-staff-remove': '連合譜を削除',
     'palette-measure-0':     'フリー',
     'palette-clear':         'クリア',
     'palette-copy':          'コピー',
     'palette-paste':         '貼り付け',
-    'watermark':             '三味ワークス「三味タブ」で作成',
+    'palette-toggle-blank':  '非表示',
+    'palette-toggle-show':   '表示',
+    'watermark':             '三味ワークス「三味道」で作成',
   },
 
   lyricPlaceholders: {
@@ -2394,6 +3278,7 @@ function setLanguage(lang) {
 
   // Toggle button
   document.getElementById('lang-toggle').textContent = s['lang-toggle'];
+  document.getElementById('logo-lang-toggle').textContent = s['lang-toggle'];
 
   // Menubar — data-menu buttons
   document.querySelector('[data-menu="file"]').textContent = s['data-menu-file'];
@@ -2404,6 +3289,10 @@ function setLanguage(lang) {
   document.getElementById('about-btn').textContent = s['about-btn'];
   document.getElementById('info-btn').textContent  = s['info-btn'];
   document.getElementById('kofi-btn').textContent  = s['kofi-btn'];
+
+  // Logo dropdown buttons
+  document.getElementById('logo-about-btn').textContent = s['about-btn'];
+  document.getElementById('logo-info-btn').textContent  = s['info-btn'];
 
   // File menu
   document.getElementById('new-submenu').textContent    = s['new-submenu'];
@@ -2432,6 +3321,7 @@ function setLanguage(lang) {
     'palette-header-technique',
     'palette-header-finger',
     'palette-header-measure',
+    'palette-header-great-staff',
     'palette-header-editing',
   ];
   document.querySelectorAll('.palette-header').forEach((el, i) => {
@@ -2443,6 +3333,9 @@ function setLanguage(lang) {
   document.querySelector('[data-action="clear"]').textContent                     = s['palette-clear'];
   document.querySelector('[data-action="editing"][data-value="copy"]').textContent  = s['palette-copy'];
   document.querySelector('[data-action="editing"][data-value="paste"]').textContent = s['palette-paste'];
+  document.querySelector('[data-action="toggle-blank"]').textContent               = s['palette-toggle-blank'];
+  document.querySelector('[data-action="great-staff-add"]').title    = s['palette-btn-great-staff-add'];
+  document.querySelector('[data-action="great-staff-remove"]').title = s['palette-btn-great-staff-remove'];
 
   // Watermarks (existing pages)
   document.querySelectorAll('.watermark').forEach(el => {
@@ -2464,9 +3357,17 @@ function setLanguage(lang) {
 
   // Lyric line placeholders
   document.querySelectorAll('.lyric-line').forEach(el => {
-  const i = parseInt(el.dataset.line) - 1;
-  el.dataset.placeholder = STRINGS.lyricPlaceholders[lang][i];
-});
+    const i = parseInt(el.dataset.line) - 1;
+    el.dataset.placeholder = STRINGS.lyricPlaceholders[lang][i];
+  });
+
+  // Staff metadata placeholders
+  document.querySelectorAll('.bar-number').forEach(el => {
+    el.dataset.placeholder = s['metadata-bar-number'];
+  });
+  document.querySelectorAll('.part-label').forEach(el => {
+    el.dataset.placeholder = s['metadata-part-label'];
+  });
 }
 
 // About button — open correct page for active language
@@ -2479,6 +3380,40 @@ document.getElementById('lang-toggle').addEventListener('click', () => {
   setLanguage(currentLang === 'en' ? 'ja' : 'en');
 });
 
+// Logo dropdown toggle
+const logoDropdownToggle = document.getElementById('logo-dropdown-toggle');
+const logoDropdown = document.querySelector('.logo-dropdown');
+
+logoDropdownToggle.addEventListener('click', (e) => {
+  e.stopPropagation();
+  logoDropdown.classList.toggle('open');
+});
+
+logoDropdown.addEventListener('click', (e) => e.stopPropagation());
+
+document.addEventListener('click', () => {
+  logoDropdown.classList.remove('open');
+});
+
+// Logo dropdown button wiring
+document.getElementById('logo-lang-toggle').addEventListener('click', () => {
+  setLanguage(currentLang === 'en' ? 'ja' : 'en');
+  logoDropdown.classList.remove('open');
+});
+
+document.getElementById('logo-about-btn').addEventListener('click', () => {
+  window.open(currentLang === 'ja' ? 'about-ja.html' : 'about.html', '_blank');
+  logoDropdown.classList.remove('open');
+});
+
+document.getElementById('logo-info-btn').addEventListener('click', () => {
+  infoPanel.classList.toggle('open');
+  logoDropdown.classList.remove('open');
+});
+
 // Init on load
 setLanguage(localStorage.getItem('lang') || 'en');
+
+// Seed initial history state
+resetHistory();
 

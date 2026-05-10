@@ -1,6 +1,6 @@
 SHAMITAB - ROADMAP
 ==============================
-Last updated: 2026-04-21
+Last updated: 2026-05-02
 
 Status values: NOT STARTED | IN PROGRESS | DONE
 
@@ -43,12 +43,12 @@ V1.1
     - Header and lyric placeholder text translated
     - Language preference saved to localStorage
     - New pages created in active language
-14. ShamiWorks landing page (shamiworks.github.io) NOT STARTED
-15. Keyboard navigation between units              NOT STARTED
-16. Multi time-division selection                  NOT STARTED
-17. Multi-staff selection                          NOT STARTED
-18. Copy                                           NOT STARTED
-19. Paste                                          NOT STARTED
+14. ShamiWorks landing page (shamiworks.github.io) DONE
+15. Keyboard navigation between units              DONE
+16. Multi time-division selection                  DONE
+17. Multi-staff selection                          DONE
+18. Copy                                           DONE
+19. Paste                                          DONE
 20. Great staff                                    NOT STARTED
 
 ======================================================

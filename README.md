@@ -1,8 +1,8 @@
-# ShamiTab
+# Shamidō
 
 A free web-based notation app for shamisen, designed primarily for Tsugaru style. Create, edit and print tablature directly in your browser.
 
-**[Open ShamiTab](https://shamiworks.github.io/ShamiTab/)**
+**[Open Shamidō](https://shamiworks.github.io/ShamiTab/)**
 
 ## Features
 
@@ -22,7 +22,7 @@ No installation required. Open the link above in any modern desktop browser.
 
 ## Licence
 
-ShamiTab is released under the [Creative Commons Attribution 4.0 International licence](https://creativecommons.org/licenses/by/4.0/). You are free to share and adapt this work provided you give appropriate credit to ShamiWorks.
+Shamidō is released under the [Creative Commons Attribution 4.0 International licence](https://creativecommons.org/licenses/by/4.0/). You are free to share and adapt this work provided you give appropriate credit to ShamiWorks.
 
 ## Created by
 

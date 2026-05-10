@@ -13,12 +13,9 @@
    version="1.1"
    id="SVGRoot"
    sodipodi:docname="ShamiDo Logo.svg"
-   inkscape:export-filename="C:\Users\Greg\Documents\Greg's Docs\ShamiWorks\ShamiDo\assets\favicon.png"
-   inkscape:export-xdpi="3.072"
-   inkscape:export-ydpi="3.072"
    inkscape:version="0.92.4 (5da689c313, 2019-01-14)">
   <metadata
-     id="metadata849">
+     id="metadata837">
     <rdf:RDF>
       <cc:Work
          rdf:about="">
@@ -30,7 +27,7 @@
     </rdf:RDF>
   </metadata>
   <defs
-     id="defs847" />
+     id="defs835" />
   <sodipodi:namedview
      pagecolor="#ffffff"
      bordercolor="#666666"
@@ -42,32 +39,33 @@
      inkscape:pageshadow="2"
      inkscape:window-width="1920"
      inkscape:window-height="1017"
-     id="namedview845"
+     id="namedview833"
      showgrid="false"
      inkscape:zoom="0.848"
      inkscape:cx="500"
-     inkscape:cy="553.77578"
+     inkscape:cy="600.9456"
      inkscape:window-x="-8"
      inkscape:window-y="-8"
      inkscape:window-maximized="1"
      inkscape:current-layer="SVGRoot" />
   <g
-     id="layer1">
+     id="layer1"
+     style="fill:none;fill-opacity:1">
     <path
-       style="fill:none;stroke:#000000;stroke-width:70;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       style="fill:none;stroke:#ffffff;stroke-width:70;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;fill-opacity:1"
        d="M 117.37465,112.43703 C 244.9171,40 500,40 500,40 C 500,40 755.0829,40 882.6253,112.43703 C 960,241.68109 960,500 960,500 C 960,500 960,758.31893 882.6253,887.56295 C 755.411,960 500,960 500,960 C 244.5889,960 117.37465,887.56295 117.37465,887.56295 C 40,758.31893 40,500 40,500 C 40,241.68109 117.37465,112.43703 117.37465,112.43703 Z"
        id="path23-3" />
     <path
        id="path5189"
        d="M 40,500 H 960"
-       style="fill:none;stroke:#000000;stroke-width:70;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
+       style="fill:none;stroke:#ffffff;stroke-width:70;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;fill-opacity:1" />
     <path
        id="path5191"
        d="M 40,340 H 960"
-       style="fill:none;stroke:#000000;stroke-width:70;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
+       style="fill:none;stroke:#ffffff;stroke-width:70;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;fill-opacity:1" />
     <path
        id="path5193"
        d="M 40,660 H 960"
-       style="fill:none;stroke:#000000;stroke-width:70;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1" />
+       style="fill:none;stroke:#ffffff;stroke-width:70;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;fill-opacity:1" />
   </g>
 </svg>
