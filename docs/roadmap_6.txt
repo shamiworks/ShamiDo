@@ -1,0 +1,93 @@
+ShamiDō 三味道 - ROADMAP
+==============================
+Last updated: 2026-05-12
+
+Status values: NOT STARTED | IN PROGRESS | DONE
+
+======================================================
+BUILD ORDER
+======================================================
+
+1. Add data-time-index to all time-divisions       DONE
+2. Refactor arc targeting to use data-time-index   DONE
+3. Triplet UI and data model                       DONE
+4. Rename data attributes                          DONE
+5. Staff unit selection tracking                   DONE
+6. Barline palette wiring                          DONE
+7. Page generation wired to menu                   DONE
+8. Repeat and stop barlines                        DONE
+9. Save                                            DONE
+10. Load                                           DONE
+11. Pre-release polish                             DONE
+    - Favicon, Open Graph metadata, preview image
+    - Logo and app title in menubar
+    - Warm grey + amber colour scheme
+    - Watermark on each page
+    - Instructions slide-in panel
+    - About page (opens in new tab)
+    - Menubar: About | Instructions | Buy me a boba
+    - README.md and LICENSE (CC BY 4.0)
+    - Bug fix: mutually exclusive technique marks
+      (sukui, hajiki, keshi, uchi)
+12. Ko-fi account and link wiring                  DONE
+
+======================================================
+V1.1
+======================================================
+
+13. Japanese language version                      DONE
+    - EN/JA toggle in menubar
+    - All UI text, palette, menus translated
+    - Info panel bilingual
+    - about-ja.html created
+    - Header and lyric placeholder text translated
+    - Language preference saved to localStorage
+    - New pages created in active language
+14. ShamiWorks landing page (shamiworks.github.io) DONE
+15. Keyboard navigation between units              DONE
+16. Multi time-division selection                  DONE
+17. Multi-staff selection                          DONE
+18. Copy                                           DONE
+19. Paste                                          DONE
+20. Great staff                                    DONE
+21. Staff metadata expansion                       DONE
+    - Bar number field
+    - Part label field
+22. Hide/show blank units                          DONE
+23. Suri/oshibachi workflow improvements           DONE
+24. Undo/Redo                                      DONE
+25. Export / Print menu item                       DONE
+26. Logo dropdown menu                             DONE
+27. Info panel mobile fix                          DONE
+28. Oshibachi mark changed to ⌐ shape              DONE
+29. App renamed to ShamiDō 三味道                  DONE
+
+======================================================
+V1.2
+======================================================
+
+30. Crescendo / decrescendo marking                NOT STARTED
+    - Possibly in the below zone
+31. Editable repeat number box                     NOT STARTED
+    - e.g. "×3" above close repeat barline
+    - Reduced font size
+32. Double-sided repeat barline                    NOT STARTED
+    - To be confirmed
+33. Repeat measure symbol                          NOT STARTED
+34. Editable text box in above or below zone       NOT STARTED
+    - For general performance notes
+
+======================================================
+V2.0 — NEW ARCHITECTURE REQUIRED
+======================================================
+
+(Nothing identified yet)
+
+======================================================
+NOTES
+======================================================
+- localStorage dropped for v1. File save/load only.
+- localStorage used in v1.1 for language preference only.
+- Bar counter display dropped for v1.
+- App renamed from "Tsubo Notation App" to ShamiTab, then to ShamiDō 三味道.
+- Published under ShamiWorks identity.

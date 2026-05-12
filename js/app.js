@@ -1872,7 +1872,9 @@ function renderArcLayer(staffBlock) {
     if (!targetSlot) return;
 
     const start = getSlotAnchor(startSlot);
-    const end   = getSlotAnchor(targetSlot);
+    const end   = type === "oshibachi"
+      ? getSlotAnchorMidLeft(targetSlot)
+      : getSlotAnchor(targetSlot);
     if (!start || !end) return;
 
     drawArc(svg, start, end, type);
@@ -1899,11 +1901,13 @@ function renderArcLayer(staffBlock) {
     let end = null;
     const offset = division.dataset.techArcOffset ? Number(division.dataset.techArcOffset) : 0;
 
+    const anchorFn = type === "oshibachi" ? getSlotAnchorMidLeft : getSlotAnchor;
+
     if (offset > 0) {
       const targetDiv = divisions[startIndex + offset];
       if (targetDiv) {
         const targetSlot = targetDiv.querySelector(`.string-slot[data-string="${targetString}"].has-tsubo`);
-        if (targetSlot) end = getSlotAnchor(targetSlot);
+        if (targetSlot) end = anchorFn(targetSlot);
       }
     }
     if (!end) {
@@ -1911,7 +1915,7 @@ function renderArcLayer(staffBlock) {
       if (!nextDiv) return;
       const nextSlot = nextDiv.querySelector(`.string-slot[data-string="${targetString}"]`);
       if (!nextSlot) return;
-      end = getSlotAnchor(nextSlot);
+      end = anchorFn(nextSlot);
     }
     if (!end) return;
 
@@ -2508,6 +2512,18 @@ function getSlotAnchor(slot) {
   };
 }
 
+function getSlotAnchorMidLeft(slot) {
+  if (!slot) return null;
+  const rect = slot.getBoundingClientRect();
+  const layer = slot.closest(".notation-layer");
+  if (!layer) return null;
+  const layerRect = layer.getBoundingClientRect();
+  return {
+    x: rect.left - layerRect.left,
+    y: rect.top + rect.height / 3 - layerRect.top
+  };
+}
+
 function getTargetSlot(startSlot, type) {
   if (!startSlot) return null;
 
@@ -2556,12 +2572,19 @@ function drawArc(svg, start, end, type) {
     "path"
   );
 
-  path.setAttribute(
-    "d",
-    `M ${start.x} ${start.y}
-     Q ${midX} ${Math.min(start.y, end.y) - lift}
-       ${end.x} ${end.y}`
-  );
+  if (type === "oshibachi") {
+    path.setAttribute("d",
+      `M ${start.x} ${start.y}
+       L ${start.x} ${end.y}
+       L ${end.x} ${end.y}`
+    );
+  } else {
+    path.setAttribute("d",
+      `M ${start.x} ${start.y}
+       Q ${midX} ${Math.min(start.y, end.y) - lift}
+         ${end.x} ${end.y}`
+    );
+  }
 
   path.setAttribute("fill", "none");
   path.setAttribute("stroke", "black");

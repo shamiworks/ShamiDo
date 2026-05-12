@@ -25,6 +25,11 @@
 - Available on all screen sizes
 - Right menu items remain visible on larger screens
 
+**Oshibachi mark**
+- Oshibachi arc replaced with a right-angle ⌐ shape
+- Runs vertically up from the start tsubo, then horizontally right to the mid-left of the end tsubo
+- More closely matches common shamisen notation practice
+
 **Keyboard navigation**
 - Navigate between staff units and lyric units using keyboard
 
