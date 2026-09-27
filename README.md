@@ -2,7 +2,7 @@
 
 A free web-based notation app for shamisen, designed primarily for Tsugaru style. Create, edit and print tablature directly in your browser.
 
-**[Open ShamiDō](https://shamiworks.github.io/ShamiTab/)**
+**[Open ShamiDō](https://shamiworks.github.io/ShamiDo/)**
 
 ## Features
 
