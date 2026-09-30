@@ -1,4 +1,4 @@
-SHAMITAB - SPECIFICATION
+ShamiDō 三味道 - SPECIFICATION
 ====================================
 Last updated: 2026-05-05
 
@@ -17,7 +17,6 @@ Hover state:              #5c5248
 Body/workspace background:#ece8e3
 Amber accent:             #c8a030
 Amber hover (transparent):rgba(200,160,48,0.08-0.15)
-Triplet disabled:         rgba(180,100,40,0.06-0.15)
 Staff lines / barlines:   #d3d3d3
 Watermark text:           #d3d3d3
 Page background:          white
@@ -167,7 +166,7 @@ dataset:
   data-tech-arc-armed     "suri" | "oshibachi" | absent  (pending arc, no target yet)
   data-tech-arc-string    string number | absent
   data-tech-arc-offset    division offset to target | absent
-  data-triplet            "1" | "2" | "3" | "disabled" | absent
+  data-triplet            "1" | "2" | "3" | absent
 
 Note: data-tech-arc and data-tech-arc-armed are mutually exclusive.
       data-tech-arc-armed draws a placeholder arc to the next division
@@ -258,6 +257,23 @@ Barline colour: #d3d3d3
 Hit targets: transparent <rect> 6px wide, Alt+click to select
 Selected barline highlighted (amber tint)
 
+Free placement (data-bars 0 only):
+  Division i selected + barline button -> barline at position i + 1
+  Button on division whose right edge already has a normal barline
+    -> removes it
+  Positions 0 and 32: type change only, never removed
+  Placement disabled on template units (2, 4, 8)
+  Switching template overwrites custom barlines
+
+Range paste (barlines):
+  Interior positions: startIndex + 1 to endIndex
+  Target interior barlines in paste range removed, then pasted applied
+  Positions 0 and 32 never changed; pasted barlines at or beyond 32 dropped
+  Target template + copied interior barlines -> target becomes Free
+  Target template + no copied interior barlines -> no conversion
+  Conversion and paste form one undo step
+Whole-unit paste: bars and barlines as-is
+
 ======================================================
 GREAT STAFF
 ======================================================
@@ -277,12 +293,10 @@ Persistent: saved to data model as greatStaff field on staff-unit
 ======================================================
 TRIPLETS
 ======================================================
-Use 4 consecutive time-divisions:
-  Positions 1-3: active (triplet notes)
-  Position 4:    disabled, background rgba(180,100,40,0.06)
-Bracket drawn below staff on .arc-layer
+Use 3 consecutive time-divisions, all active (triplet notes 1-3)
+Bracket drawn below staff on .arc-layer, spanning all 3 divisions
 Keyboard shortcut: t
-Toggle off from any active division or Backspace
+Toggle off from any triplet division or Backspace (clears all 3)
 
 ======================================================
 BLANK UNITS
@@ -407,7 +421,7 @@ Time Division (empty fields omitted):
 finger values:    "first" | "second" | "third"
 techArc values:   "suri" | "oshibachi"
 techArcArmed:     "suri" | "oshibachi" (mutually exclusive with techArc)
-triplet values:   "1" | "2" | "3" | "disabled"
+triplet values:   "1" | "2" | "3" (other values, e.g. legacy "disabled", are ignored on load)
 greatStaff values:"start" | "middle" | "end"
 
 ======================================================

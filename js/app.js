@@ -1357,8 +1357,6 @@ function dispatchCommit(intent) {
 
   if (!selectedDivision) return;
 
-  if (selectedDivision.dataset.triplet === "disabled" && intent.action !== "triplet") return;
-
   switch (intent.action) {
     case "tsubo":
       if (!selectedSlot) return;
@@ -1793,18 +1791,18 @@ function commitTriplet(division) {
 
   const divisions = Array.from(layer.querySelectorAll(".time-division"));
 
-  // --- Toggle off: from any active triplet division ---
+  // A triplet occupies exactly 3 consecutive divisions, all active.
+  // --- Toggle off: from any triplet division ---
   const tripletPos = division.dataset.triplet;
   if (tripletPos === "1" || tripletPos === "2" || tripletPos === "3") {
     // Find division 1 of this group
-    const timeIndex = Number(division.dataset.timeIndex);
     const offset = Number(tripletPos) - 1;
     const startIndex = divisions.indexOf(division) - offset;
 
-    for (let i = startIndex; i < startIndex + 4; i++) {
+    for (let i = startIndex; i < startIndex + 3; i++) {
       if (divisions[i]) {
         delete divisions[i].dataset.triplet;
-        divisions[i].classList.remove("triplet-active", "triplet-disabled");
+        divisions[i].classList.remove("triplet-active");
       }
     }
 
@@ -1815,23 +1813,18 @@ function commitTriplet(division) {
   // --- Toggle on ---
   const startIndex = divisions.indexOf(division);
 
-  // Need 3 more divisions ahead (positions 2, 3, 4)
-  if (startIndex + 3 >= divisions.length) return;
+  // Need 2 more divisions ahead (positions 2, 3)
+  if (startIndex + 2 >= divisions.length) return;
 
-  // Check none of the 4 divisions are already in a triplet
-  for (let i = startIndex; i < startIndex + 4; i++) {
+  // Check none of the 3 divisions are already in a triplet
+  for (let i = startIndex; i < startIndex + 3; i++) {
     if (divisions[i].dataset.triplet) return;
   }
 
-  divisions[startIndex].dataset.triplet     = "1";
-  divisions[startIndex + 1].dataset.triplet = "2";
-  divisions[startIndex + 2].dataset.triplet = "3";
-  divisions[startIndex + 3].dataset.triplet = "disabled";
-
-  divisions[startIndex].classList.add("triplet-active");
-  divisions[startIndex + 1].classList.add("triplet-active");
-  divisions[startIndex + 2].classList.add("triplet-active");
-  divisions[startIndex + 3].classList.add("triplet-disabled");
+  for (let i = 0; i < 3; i++) {
+    divisions[startIndex + i].dataset.triplet = String(i + 1);
+    divisions[startIndex + i].classList.add("triplet-active");
+  }
 
   renderTripletBrackets();
 }
@@ -1922,7 +1915,7 @@ function renderArcLayer(staffBlock) {
     drawArc(svg, start, end, type);
   });
 
-  // --- Triplet brackets ---
+  // --- Triplet brackets (span divisions 1–3 of each group) ---
   divisions.forEach(division => {
     if (division.dataset.triplet !== "1") return;
 
@@ -2967,14 +2960,11 @@ function restoreTimeDivision(div, data) {
     commitTechArc(div, data.techArcArmed, data.techArcString);
   }
 
-  // 6. Triplet — set attributes and CSS classes directly; bracket drawn by renderArcLayer
-  if (data.triplet) {
+  // 6. Triplet — set attributes and CSS classes directly; bracket drawn by renderArcLayer.
+  // Only "1" | "2" | "3" are valid; anything else (e.g. legacy "disabled") is ignored.
+  if (data.triplet === "1" || data.triplet === "2" || data.triplet === "3") {
     div.dataset.triplet = data.triplet;
-    if (data.triplet === "disabled") {
-      div.classList.add("triplet-disabled");
-    } else {
-      div.classList.add("triplet-active");
-    }
+    div.classList.add("triplet-active");
   }
 }
 
@@ -3038,7 +3028,7 @@ function clearDivisionFully(div) {
   delete div.dataset.techArcOffset;
 
   delete div.dataset.triplet;
-  div.classList.remove("triplet-active", "triplet-disabled");
+  div.classList.remove("triplet-active");
 }
 
 // Clear all notation content in a staff unit and reset barlines to defaults

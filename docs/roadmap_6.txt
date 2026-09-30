@@ -76,6 +76,16 @@ V1.2
 33. Repeat measure symbol                          NOT STARTED
 34. Editable text box in above or below zone       NOT STARTED
     - For general performance notes
+35. Free barline placement                         NOT STARTED
+    - Free template only (data-bars 0)
+    - Select a division, press a barline button: barline placed at
+      right edge (position = index + 1)
+    - Pressing again on a normal barline removes it
+    - Positions 0 and 32 cannot be removed, only changed in type
+    - Alt+click selects any barline to change type
+36. Barlines in copy/paste                         NOT STARTED
+    - Whole-unit: bars and barlines pasted as-is
+    - Range: interior barlines copied and offset
 
 ======================================================
 V2.0 — NEW ARCHITECTURE REQUIRED

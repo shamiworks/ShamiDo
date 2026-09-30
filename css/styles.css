@@ -614,14 +614,6 @@ body {
   text-decoration: 1px underline double #000000;
 }
 
-/* .triplet-disabled {
-  background: rgba(180, 100, 40, 0.06);
-} */
-
-.triplet-disabled:hover {
-  background: rgba(180, 100, 40, 0.15);
-}
-
 .above-zone {
   display: flex;
   height: 4mm;
