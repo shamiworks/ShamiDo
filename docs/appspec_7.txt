@@ -1,6 +1,6 @@
 ShamiDō 三味道 - SPECIFICATION
 ====================================
-Last updated: 2026-05-05
+Last updated: 2026-10-01
 
 ======================================================
 FONTS
@@ -249,33 +249,42 @@ Every staff-unit is free placement. There is no per-unit template mode.
 Each barline: { "position": <0-32>, "type": "normal" | "open-repeat" | "close-repeat" | "stop" }
 Positions 0 and 32 always exist and are never removed.
 Barline colour: #d3d3d3
+Barlines are not directly clickable. They are edited through the
+selected time-division (see Editing).
 
-Template buttons (shortcuts):
-  2: [16]   4: [8, 16, 24]   8: [4, 8, 12, 16, 20, 24, 28]
+Template buttons (shortcuts): 0, 2, 4, 8
+  0: []   2: [16]   4: [8, 16, 24]   8: [4, 8, 12, 16, 20, 24, 28]
   Replace all interior barlines (1-31) with normal barlines at these positions.
   Positions 0 and 32 keep their current types.
-  "0" button removes all interior barlines.
+  "0" removes all interior barlines.
 
-Editing (division k selected, barline button T pressed):
-  k = 2..32, acts on position k:
-    no barline -> place T
-    different type -> change to T
+Editing (division k selected, 1-based; data-time-index k-1),
+barline button of type X pressed. Acts on the right edge, position k:
+  k = 2..32:
+    no barline -> place X
+    different type -> change to X
     same type -> remove (position 32: no change)
   k = 1, cycle (the mark moves, never two at once):
     position 1 is X -> remove position 1, set position 0 to normal
     else position 0 is X -> set position 0 to normal, place/change X at position 1
     else -> set position 0 to X
-  Disabled while a multi-division range is selected.
+  Barline buttons are disabled while a multi-division range is selected.
+  Barlines kept sorted by position.
   Undo/redo: one step per press.
+  No keyboard shortcuts for barlines.
 
-Range paste (barlines):
-  Interior positions: startIndex + 1 to endIndex
-  Target interior barlines in paste range removed, then pasted applied
-  Positions 0 and 32 never changed; pasted barlines at or beyond 32 dropped
-  Paste and barlines form one undo step
-Whole-unit paste: barlines as-is
+Clearing a staff-unit's content (Delete, Clear Page, before whole-unit paste)
+leaves its barlines unchanged.
 
-No keyboard shortcuts for barlines (infrequent during entry; palette buttons only).
+Copy/paste:
+  Whole-unit: barlines pasted as-is.
+  Range: interior positions startIndex + 1 to endIndex are copied.
+    Target interior barlines in the paste range are removed, then pasted
+    ones applied at the offset (even if none were copied).
+    Positions 0 and 32 are never changed; pasted barlines at or beyond 32
+    are dropped. Paste and barlines form one undo step.
+Paste of any kind is its own undo step.
+
 ======================================================
 GREAT STAFF
 ======================================================

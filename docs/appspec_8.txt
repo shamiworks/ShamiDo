@@ -1,6 +1,6 @@
 ShamiDō 三味道 - SPECIFICATION
 ====================================
-Last updated: 2026-05-05
+Last updated: 2026-10-02
 
 ======================================================
 FONTS
@@ -63,8 +63,8 @@ Height: 40px, background: #2e2a27, position: fixed top
 Left side:
   .icon           ShamiWorks_white.svg, 32x32px, links to index.html
   .menu-title-block
-    .menu-title-en  "ShamiTab", M Plus 2, amber (#c8a030)
-    .menu-title-ja  "三味タブ", IBM Plex Sans JP, white
+    .menu-title-en  "ShamiDō", M Plus 2, amber (#c8a030)
+    .menu-title-ja  "三味道", IBM Plex Sans JP, white
   .menu-btn       File | Edit | Page (width 60px)
 Right side (.menu-right):
   About           links to about.html (new tab)
@@ -83,7 +83,7 @@ Close button top right.
 ======================================================
 WATERMARK
 ======================================================
-"Created with ShamiTab by ShamiWorks"
+"Created with ShamiDō by ShamiWorks"
 Font: M Plus 2, 8pt, #d3d3d3, centred
 Appended to .staff-page-content / .lyric-page-content
 Visible on screen and in print.
@@ -246,36 +246,59 @@ Clearing:
 BARLINES
 ======================================================
 Every staff-unit is free placement. There is no per-unit template mode.
-Each barline: { "position": <0-32>, "type": "normal" | "open-repeat" | "close-repeat" | "stop" }
+Each barline: { "position": <0-32>, "type": "normal" | "open-repeat" | "close-repeat" | "stop", "repeat": "<digits>" }
+  "repeat" only on close-repeat at positions 1-32; omitted when empty.
 Positions 0 and 32 always exist and are never removed.
 Barline colour: #d3d3d3
+Barlines are not directly clickable. They are edited through the
+selected time-division (see Editing).
 
-Template buttons (shortcuts):
-  2: [16]   4: [8, 16, 24]   8: [4, 8, 12, 16, 20, 24, 28]
+Template buttons (shortcuts): 0, 2, 4, 8
+  0: []   2: [16]   4: [8, 16, 24]   8: [4, 8, 12, 16, 20, 24, 28]
   Replace all interior barlines (1-31) with normal barlines at these positions.
   Positions 0 and 32 keep their current types.
-  "0" button removes all interior barlines.
+  "0" removes all interior barlines.
 
-Editing (division k selected, barline button T pressed):
-  k = 2..32, acts on position k:
-    no barline -> place T
-    different type -> change to T
+Editing (division k selected, 1-based; data-time-index k-1),
+barline button of type X pressed. Acts on the right edge, position k:
+  k = 2..32:
+    no barline -> place X
+    different type -> change to X
     same type -> remove (position 32: no change)
   k = 1, cycle (the mark moves, never two at once):
     position 1 is X -> remove position 1, set position 0 to normal
     else position 0 is X -> set position 0 to normal, place/change X at position 1
     else -> set position 0 to X
-  Disabled while a multi-division range is selected.
+  Barline button presses are ignored while a multi-division range is selected
+  (no visual change to the buttons).
+  Barlines kept sorted by position.
   Undo/redo: one step per press.
+  No keyboard shortcuts for barlines.
 
-Range paste (barlines):
-  Interior positions: startIndex + 1 to endIndex
-  Target interior barlines in paste range removed, then pasted applied
-  Positions 0 and 32 never changed; pasted barlines at or beyond 32 dropped
-  Paste and barlines form one undo step
-Whole-unit paste: barlines as-is
+Clearing a staff-unit's content (Delete, Clear Page, before whole-unit paste)
+leaves its barlines unchanged.
 
-No keyboard shortcuts for barlines (infrequent during entry; palette buttons only).
+Copy/paste:
+  Whole-unit: barlines pasted as-is.
+  Range: interior positions startIndex + 1 to endIndex are copied.
+    Target interior barlines in the paste range are removed, then pasted
+    ones applied at the offset (even if none were copied).
+    Positions 0 and 32 are never changed; pasted barlines at or beyond 32
+    are dropped. Paste and barlines form one undo step.
+Paste of any kind is its own undo step.
+
+Repeat number (close-repeat barlines at positions 1-32 only):
+  Editable box in the above zone, right-aligned to the barline.
+  Font 6pt, colour #8a8a8a. May overlap the finger mark of the division to its left.
+  User types digits only (max 2); the "×" is added by CSS.
+  Empty: faint "×?" placeholder on screen, hidden in print. Filled: printed.
+  Stored as "repeat": "3" on the barline object, omitted when empty.
+  Dropped if the barline type changes or the barline is removed
+  (including by template buttons 0, 2, 4, 8).
+  Edit is one undo step, recorded on blur if the value changed. Enter finishes editing.
+  Typing in the box does not trigger shortcuts.
+  Carried by range and whole-unit copy/paste.
+
 ======================================================
 GREAT STAFF
 ======================================================
@@ -288,8 +311,12 @@ Roles (data-great-staff):
   "middle"  intermediate units — barline extends both directions (0–25mm)
   "end"     last unit in group — barline extends upward to 0mm
 
-Created: select multiple staff units, click Great staff palette button
-Removed: select any unit within the group, click Remove great staff button
+Toggle button (palette section "Misc" / "その他"):
+  Selection includes a grouped unit -> removes the group(s)
+  Otherwise, 2+ units selected -> creates a group
+  Otherwise -> no effect
+  No pressed, active or disabled styling.
+  One undo step per press.
 Persistent: saved to data model as greatStaff field on staff-unit
 
 ======================================================
@@ -334,8 +361,8 @@ Commit Layer   commitTsubo, commitRest, commitDuration,
                commitTechArc, commitFinger,
                commitClearSlot, commitClearDivision,
                commitClearRest, commitClearDuration,
-               commitBarlineType, commitGreatStaffAdd,
-               commitGreatStaffRemove, commitToggleBlank
+               commitBarlineType, commitGreatStaffToggle,
+               commitToggleBlank
 
 Selection model:
   selectedSlot        one string-slot at a time
@@ -377,7 +404,7 @@ Staff Unit:
   "barlines": [
     { "position": 0, "type": "normal" },
     { "position": 8, "type": "open-repeat" },
-    { "position": 24, "type": "close-repeat" },
+    { "position": 24, "type": "close-repeat", "repeat": "3" },
     { "position": 32, "type": "stop" }
   ],
   "timeDivisions": [ ...32 time-division objects ],

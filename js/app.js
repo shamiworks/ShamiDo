@@ -115,11 +115,13 @@ function updateUndoRedoMenu() {
 ======================================================
 */
 
+// Template shortcuts: interior barline positions (1-31) only.
+// 0 is "Clear" (no interior barlines).
 const BAR_TEMPLATES = {
-  0: [0, 32],
-  2: [0, 16, 32],
-  4: [0, 8, 16, 24, 32],
-  8: [0, 4, 8, 12, 16, 20, 24, 28, 32]
+  0: [],
+  2: [16],
+  4: [8, 16, 24],
+  8: [4, 8, 12, 16, 20, 24, 28]
 };
 
 function createHeader(isFirstPage, pageNumber) {
@@ -156,7 +158,6 @@ function createStaffUnit() {
   const block = document.createElement("div");
   block.className = "staff-unit";
   block.dataset.blockType = "staff-unit";
-  block.dataset.bars = 4;
   block.dataset.barlines = JSON.stringify(buildDefaultBarlines(4));
 
   const metadata = document.createElement("div");
@@ -319,7 +320,6 @@ const workspace = document.querySelector(".workspace");
 let selectedSlot = null;
 let selectedDivision = null;
 let selectedStaffUnit = null;
-let selectedBarline = null;
 
 let multiDivisionSelection = null; // { staffUnit, startIndex, endIndex }
 let multiDivisionAnchor    = null; // integer index — held across shift+clicks
@@ -335,21 +335,6 @@ workspace.addEventListener("click", (e) => {
   // Suppress click when a drag just ended
   if (isDragging) { isDragging = false; return; }
 
-  // Alt+click on barline hit target → select barline only
-  // Use elementsFromPoint so hit rects in .staff-svg (z-index 1) are found
-  // even when .notation-layer (z-index 2) intercepts the event target.
-  if (e.altKey) {
-    const hit = document.elementsFromPoint(e.clientX, e.clientY)
-      .find(el => el.classList.contains("barline-hit"));
-    if (hit) {
-      const staffUnit = hit.closest(".staff-unit");
-      if (staffUnit) {
-        selectBarline(staffUnit, parseInt(hit.dataset.posIndex));
-        return;
-      }
-    }
-  }
-
   // Shift+click — multi-selection triggers
   if (e.shiftKey) {
     const division = e.target.closest(".time-division");
@@ -363,7 +348,6 @@ workspace.addEventListener("click", (e) => {
           ? Number(selectedDivision.dataset.timeIndex)
           : clickedIndex;
         clearMultiStaffSelection();
-        deselectBarline();
         deselectSlot();
         // selectedDivision is intentionally kept as the visual anchor
       } else if (!multiDivisionSelection || multiDivisionSelection.staffUnit !== unit) {
@@ -385,7 +369,6 @@ workspace.addEventListener("click", (e) => {
           ? allStaff.indexOf(selectedStaffUnit)
           : clickedIdx;
         clearMultiDivisionSelection();
-        deselectBarline();
         deselectSlot();
         deselectDivision();
       }
@@ -400,9 +383,6 @@ workspace.addEventListener("click", (e) => {
   // Regular click: clear any active multi-selection
   clearMultiDivisionSelection();
   clearMultiStaffSelection();
-
-  // Any other click clears barline selection
-  deselectBarline();
 
   const staffUnit = e.target.closest(".staff-unit");
   if (staffUnit !== selectedStaffUnit) {
@@ -477,7 +457,6 @@ workspace.addEventListener("mousemove", (e) => {
     isDragging = true;
     isDragStaffMode = true;
     clearMultiDivisionSelection();
-    deselectBarline();
     deselectSlot();
     deselectDivision();
     const allStaff = Array.from(document.querySelectorAll(".staff-unit"));
@@ -494,7 +473,6 @@ workspace.addEventListener("mousemove", (e) => {
   if (division.closest(".staff-unit") !== anchorUnit) return;
   isDragging = true;
   clearMultiStaffSelection();
-  deselectBarline();
   deselectSlot();
   deselectDivision();
   applyMultiDivisionSelection(
@@ -616,22 +594,6 @@ function applyMultiStaffSelection(startUnit, endUnit) {
     unit.querySelectorAll(".time-division").forEach(div => div.classList.remove("selected"));
   }
   updateBlankButton();
-}
-
-function selectBarline(staffUnit, posIndex) {
-  const prev = selectedBarline;
-  selectedBarline = { staffUnit, posIndex };
-  if (prev && prev.staffUnit !== staffUnit) {
-    drawBarlines(prev.staffUnit);
-  }
-  drawBarlines(staffUnit);
-}
-
-function deselectBarline() {
-  if (!selectedBarline) return;
-  const { staffUnit } = selectedBarline;
-  selectedBarline = null;
-  drawBarlines(staffUnit);
 }
 
 
@@ -943,7 +905,11 @@ function handleCopy() {
         return idx >= lo && idx <= hi;
       })
       .map(serializeTimeDivision);
-    clipboard = { type: "divisions", data };
+    // Interior barlines (lo+1 .. hi), stored relative to the range start
+    const barlines = JSON.parse(staffUnit.dataset.barlines || "[]")
+      .filter(b => b.pos > lo && b.pos <= hi)
+      .map(b => ({ ...b, pos: b.pos - lo }));
+    clipboard = { type: "divisions", data, barlines };
     return;
   }
   if (multiStaffSelection) {
@@ -978,7 +944,11 @@ function handlePaste() {
       if (target) { clearDivisionFully(target); restoreTimeDivision(target, divData); }
     });
     const staffUnit = layer.closest(".staff-unit");
-    if (staffUnit) renderArcLayer(staffUnit);
+    if (staffUnit) {
+      renderArcLayer(staffUnit);
+      pasteRangeBarlines(staffUnit, startIdx, clipboard.data.length, clipboard.barlines || []);
+    }
+    pushHistory();
     return;
   }
 
@@ -1002,7 +972,24 @@ function handlePaste() {
       clearStaffUnitContent(unit);
       restoreStaffUnit(unit, clipboard.data[i]);
     });
+    pushHistory();
   }
+}
+
+// Range paste: replace the target's interior barlines within the paste range
+// with the copied ones (offset to startIdx). Positions 0 and 32 are never touched.
+function pasteRangeBarlines(staffUnit, startIdx, length, copied) {
+  const endIdx = startIdx + length - 1;
+  const kept = JSON.parse(staffUnit.dataset.barlines || "[]")
+    .filter(b => b.pos === 0 || b.pos === 32 || b.pos <= startIdx || b.pos > endIdx);
+  const pasted = copied
+    .map(b => ({ ...b, pos: b.pos + startIdx }))
+    .filter(b => b.pos > 0 && b.pos < 32);
+
+  staffUnit.dataset.barlines = JSON.stringify(
+    [...kept, ...pasted].sort((a, b) => a.pos - b.pos)
+  );
+  drawBarlines(staffUnit);
 }
 
 /*
@@ -1309,8 +1296,6 @@ function handlePaletteInput(btn) {
     return;
   }
 
-  if (action === "great-staff-add")    { commitGreatStaffAdd();    return; }
-  if (action === "great-staff-remove") { commitGreatStaffRemove(); return; }
   if (action === "toggle-blank")       { commitToggleBlank();       return; }
 
   // Suri and Oshibachi
@@ -1343,15 +1328,21 @@ function dispatchCommit(intent) {
         alert("Select a staff unit to change the number of measures");
         return;
       }
-      setStaffBars(selectedStaffUnit, bars);
+      applyBarTemplate(selectedStaffUnit, bars);
     }
     pushHistory();
     return;
   }
 
   if (intent.action === "barline-type") {
-    commitBarlineType(intent.value);
-    pushHistory();
+    // Acts on the selected division's right edge; ignored during a multi-division range
+    if (multiDivisionSelection || !selectedDivision) return;
+    if (commitBarlineType(selectedDivision, intent.value)) pushHistory();
+    return;
+  }
+
+  if (intent.action === "great-staff-toggle") {
+    if (commitGreatStaffToggle()) pushHistory();
     return;
   }
 
@@ -2133,7 +2124,7 @@ function isTypingInHeader() {
 
 // Barlines
 function buildDefaultBarlines(bars) {
-  const positions = BAR_TEMPLATES[bars] || [0, 32];
+  const positions = [0, ...(BAR_TEMPLATES[bars] || []), 32];
   return positions.map(p => ({ pos: p }));
 }
 
@@ -2144,7 +2135,7 @@ function drawBarlines(staffBlock) {
   svg.querySelectorAll(".barline-group").forEach(g => g.remove());
 
   const data = JSON.parse(staffBlock.dataset.barlines || "[]");
-  const isSelectedUnit = selectedBarline && selectedBarline.staffUnit === staffBlock;
+  const color = "#d3d3d3";
 
   // Geometry — all in mm, derived from staff line stroke width
   const thin  = 0.3;               // same as .staff-line stroke-width
@@ -2158,11 +2149,9 @@ function drawBarlines(staffBlock) {
 
   const greatStaff = staffBlock.dataset.greatStaff;
 
-  data.forEach((bar, i) => {
+  data.forEach(bar => {
     const x = (bar.pos / 32) * 180;
     const type = bar.type || "normal";
-    const isSelected = isSelectedUnit && selectedBarline.posIndex === i;
-    const color = isSelected ? "dodgerblue" : "#d3d3d3";
 
     // Extend endpoint barlines for great staff grouping
     let y1 = 6, y2 = 14;
@@ -2173,18 +2162,6 @@ function drawBarlines(staffBlock) {
 
     const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
     g.classList.add("barline-group");
-
-    // Transparent hit target (retrieved via elementsFromPoint on Alt+click)
-    const hit = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-    hit.setAttribute("x", `${x - 3}mm`);
-    hit.setAttribute("y", "5mm");
-    hit.setAttribute("width", "6mm");
-    hit.setAttribute("height", "10mm");
-    hit.setAttribute("fill", "transparent");
-    hit.setAttribute("pointer-events", "all");
-    hit.classList.add("barline-hit");
-    hit.dataset.posIndex = i;
-    g.appendChild(hit);
 
     switch (type) {
       case "stop":
@@ -2217,6 +2194,61 @@ function drawBarlines(staffBlock) {
 
     svg.appendChild(g);
   });
+
+  // Repeat number boxes (close-repeat at positions 1-32), overlaid on the notation layer
+  const layer = staffBlock.querySelector(".notation-layer");
+  if (!layer) return;
+  layer.querySelectorAll(".repeat-box").forEach(el => el.remove());
+  data.forEach(bar => {
+    if (bar.type === "close-repeat" && bar.pos >= 1) {
+      layer.appendChild(createRepeatBox(staffBlock, bar));
+    }
+  });
+}
+
+// Editable "×N" box, right-aligned to the barline in the above zone.
+// Stores digits only (max 2) as bar.repeat; the "×" is added by CSS.
+function createRepeatBox(staffBlock, bar) {
+  const box = document.createElement("div");
+  box.className = "repeat-box";
+  box.contentEditable = "true";
+  box.spellcheck = false;
+  box.style.right = `${180 - (bar.pos / 32) * 180}mm`;
+  box.textContent = bar.repeat || "";
+
+  let valueOnFocus = "";
+  box.addEventListener("focus", () => { valueOnFocus = box.textContent; });
+
+  box.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); box.blur(); }
+  });
+
+  box.addEventListener("input", () => {
+    const digits = box.textContent.replace(/\D/g, "").slice(0, 2);
+    // Compare markup too, so a stray <br> left by the browser is cleared and :empty applies
+    if (box.innerHTML !== digits) {
+      box.textContent = digits;
+      // Keep the caret at the end after sanitising
+      const range = document.createRange();
+      range.selectNodeContents(box);
+      range.collapse(false);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+    const barlines = JSON.parse(staffBlock.dataset.barlines || "[]");
+    const target = barlines.find(b => b.pos === bar.pos);
+    if (!target) return;
+    if (digits) target.repeat = digits;
+    else delete target.repeat;
+    staffBlock.dataset.barlines = JSON.stringify(barlines);
+  });
+
+  box.addEventListener("blur", () => {
+    if (box.textContent !== valueOnFocus) pushHistory();
+  });
+
+  return box;
 }
 
 function makeLine(x, y1, y2, stroke, strokeWidth) {
@@ -2306,67 +2338,98 @@ function createNotationLayer(){
   return layer;
 }
 
-// Bar counting and numbering
-function setStaffBars(staffBlock, bars) {
-  if (!BAR_TEMPLATES[bars]) return;
+// Template shortcut: replace all interior barlines (1-31) with normal barlines
+// at the template positions. Positions 0 and 32 keep their current types.
+function applyBarTemplate(staffBlock, bars) {
+  const interior = BAR_TEMPLATES[bars];
+  if (!interior) return;
 
-  staffBlock.dataset.bars = bars;
-  staffBlock.dataset.barlines = JSON.stringify(buildDefaultBarlines(bars));
+  const ends = JSON.parse(staffBlock.dataset.barlines || "[]")
+    .filter(b => b.pos === 0 || b.pos === 32);
+  staffBlock.dataset.barlines = JSON.stringify(
+    [...ends, ...interior.map(pos => ({ pos }))].sort((a, b) => a.pos - b.pos)
+  );
 
   drawBarlines(staffBlock);
 }
 
-function commitBarlineType(type) {
-  if (!selectedBarline) return;
-  const { staffUnit, posIndex } = selectedBarline;
+// Division-based editing: division k (1-based) acts on position k, its right edge.
+// No barline → place; different type → change; same type → remove (32: no change).
+// Division 1 cycles: position 0 → position 1 (0 reset to normal) → remove 1.
+// Returns true if the unit changed.
+function commitBarlineType(division, type) {
+  const staffUnit = division.closest(".staff-unit");
+  if (!staffUnit) return false;
 
+  const k = Number(division.dataset.timeIndex) + 1;
   const barlines = JSON.parse(staffUnit.dataset.barlines || "[]");
-  if (!barlines[posIndex]) return;
 
-  if (type === "normal") {
-    delete barlines[posIndex].type;
+  const typeAt = pos => {
+    const bar = barlines.find(b => b.pos === pos);
+    return bar ? (bar.type || "normal") : null;
+  };
+  const remove = pos => {
+    const idx = barlines.findIndex(b => b.pos === pos);
+    if (idx !== -1) barlines.splice(idx, 1);
+  };
+  const set = (pos, t) => {
+    remove(pos);
+    const bar = { pos };
+    if (t !== "normal") bar.type = t;
+    barlines.push(bar);
+  };
+
+  if (k === 1) {
+    if (typeAt(1) === type)      { remove(1); set(0, "normal"); }
+    else if (typeAt(0) === type) { set(0, "normal"); set(1, type); }
+    else                         set(0, type);
+  } else if (typeAt(k) !== type) {
+    set(k, type);
+  } else if (k === 32) {
+    return false;
   } else {
-    barlines[posIndex].type = type;
+    remove(k);
   }
 
+  barlines.sort((a, b) => a.pos - b.pos);
   staffUnit.dataset.barlines = JSON.stringify(barlines);
-  selectedBarline = null;
   drawBarlines(staffUnit);
+  return true;
 }
 
-function commitGreatStaffAdd() {
-  if (!multiStaffSelection) return;
-  const { startUnit, endUnit } = multiStaffSelection;
+// Staff units in the current selection: the multi-staff range, else the single selected unit
+function getSelectedStaffUnits() {
   const allStaff = Array.from(document.querySelectorAll(".staff-unit"));
-  const lo = Math.min(allStaff.indexOf(startUnit), allStaff.indexOf(endUnit));
-  const hi = Math.max(allStaff.indexOf(startUnit), allStaff.indexOf(endUnit));
-  if (lo === hi) return;
-
-  for (let i = lo; i <= hi; i++) {
-    const unit = allStaff[i];
-    if (!unit) continue;
-    delete unit.dataset.greatStaff;
-    if (i === lo)       unit.dataset.greatStaff = "start";
-    else if (i === hi)  unit.dataset.greatStaff = "end";
-    else                unit.dataset.greatStaff = "middle";
-    drawBarlines(unit);
-  }
-}
-
-function commitGreatStaffRemove() {
-  const allStaff = Array.from(document.querySelectorAll(".staff-unit"));
-
-  const selectedUnits = new Set();
-  if (selectedStaffUnit) selectedUnits.add(selectedStaffUnit);
   if (multiStaffSelection) {
     const { startUnit, endUnit } = multiStaffSelection;
-    const lo = Math.min(allStaff.indexOf(startUnit), allStaff.indexOf(endUnit));
-    const hi = Math.max(allStaff.indexOf(startUnit), allStaff.indexOf(endUnit));
-    for (let i = lo; i <= hi; i++) {
-      if (allStaff[i]) selectedUnits.add(allStaff[i]);
-    }
+    const a = allStaff.indexOf(startUnit), b = allStaff.indexOf(endUnit);
+    if (a === -1 || b === -1) return [];
+    return allStaff.slice(Math.min(a, b), Math.max(a, b) + 1);
   }
-  if (selectedUnits.size === 0) return;
+  return selectedStaffUnit && allStaff.includes(selectedStaffUnit) ? [selectedStaffUnit] : [];
+}
+
+// Single toggle: any selected unit grouped → remove its group(s);
+// otherwise two or more selected units → create a group. Returns true if changed.
+function commitGreatStaffToggle() {
+  const units = getSelectedStaffUnits();
+  if (units.some(u => u.dataset.greatStaff)) return removeGreatStaffGroups(units);
+  if (units.length < 2) return false;
+
+  units.forEach((unit, i) => {
+    delete unit.dataset.greatStaff;
+    if (i === 0)                     unit.dataset.greatStaff = "start";
+    else if (i === units.length - 1) unit.dataset.greatStaff = "end";
+    else                             unit.dataset.greatStaff = "middle";
+    drawBarlines(unit);
+  });
+  return true;
+}
+
+function removeGreatStaffGroups(units) {
+  const allStaff = Array.from(document.querySelectorAll(".staff-unit"));
+  const selectedUnits = new Set(units);
+  let changed = false;
 
   // Walk all units to find contiguous great-staff groups containing a selected unit
   const groups = [];
@@ -2387,8 +2450,10 @@ function commitGreatStaffRemove() {
         delete unit.dataset.greatStaff;
         drawBarlines(unit);
       });
+      changed = true;
     }
   });
+  return changed;
 }
 
 function updateBlankButton() {
@@ -2603,7 +2668,6 @@ function newPage(type) {
   selectedSlot      = null;
   selectedDivision  = null;
   selectedStaffUnit = null;
-  selectedBarline   = null;
   workspace.innerHTML = "";
 
   generatePage(type, 1);
@@ -2667,19 +2731,18 @@ function serializeDocument() {
 }
 
 function serializeStaffUnit(block) {
-  const bars = Number(block.dataset.bars);
-
   const rawBarlines = JSON.parse(block.dataset.barlines || "[]");
-  const barlines = rawBarlines.map(b => ({
-    position: b.pos,
-    type: b.type || "normal"
-  }));
+  const barlines = rawBarlines.map(b => {
+    const obj = { position: b.pos, type: b.type || "normal" };
+    if (b.repeat) obj.repeat = b.repeat;
+    return obj;
+  });
 
   const timeDivisions = Array.from(
     block.querySelectorAll(".time-division")
   ).map(serializeTimeDivision);
 
-  const result = { type: "staff-unit", bars, barlines, timeDivisions };
+  const result = { type: "staff-unit", barlines, timeDivisions };
   if (block.dataset.greatStaff) result.greatStaff = block.dataset.greatStaff;
   const barNumberText = block.querySelector(".bar-number")?.textContent?.trim();
   if (barNumberText) result.barNumber = barNumberText;
@@ -2820,7 +2883,6 @@ function loadDocument(json) {
   selectedSlot      = null;
   selectedDivision  = null;
   selectedStaffUnit = null;
-  selectedBarline   = null;
 
   // Clear all existing pages
   workspace.innerHTML = "";
@@ -2879,14 +2941,12 @@ function loadDocument(json) {
 }
 
 function restoreStaffUnit(staffUnit, block) {
-  // Reset to saved bar count (also resets barlines to default positions)
-  setStaffBars(staffUnit, block.bars);
-
-  // Overwrite barlines with the saved data
-  // Saved format: { position, type } → internal format: { pos, type? }
+  // Barlines come from the saved data only; legacy "bars" is ignored.
+  // Saved format: { position, type, repeat? } → internal format: { pos, type?, repeat? }
   const internalBarlines = (block.barlines || []).map(b => {
     const obj = { pos: b.position };
     if (b.type && b.type !== "normal") obj.type = b.type;
+    if (b.repeat && b.type === "close-repeat" && b.position >= 1) obj.repeat = String(b.repeat);
     return obj;
   });
   staffUnit.dataset.barlines = JSON.stringify(internalBarlines);
@@ -3031,14 +3091,10 @@ function clearDivisionFully(div) {
   div.classList.remove("triplet-active");
 }
 
-// Clear all notation content in a staff unit and reset barlines to defaults
+// Clear all notation content in a staff unit (barlines are left as-is)
 function clearStaffUnitContent(staffUnit) {
   staffUnit.querySelectorAll(".time-division").forEach(clearDivisionFully);
   renderArcLayer(staffUnit);
-
-  const bars = parseInt(staffUnit.dataset.bars);
-  staffUnit.dataset.barlines = JSON.stringify(buildDefaultBarlines(bars));
-  drawBarlines(staffUnit);
 }
 
 document.getElementById("clear-page").addEventListener("click", () => {
@@ -3079,7 +3135,6 @@ document.getElementById("delete-page").addEventListener("click", () => {
   if (selectedSlot      && page.contains(selectedSlot))           { selectedSlot.classList.remove("selected");           selectedSlot = null; }
   if (selectedDivision  && page.contains(selectedDivision))       { selectedDivision.classList.remove("selected");       selectedDivision = null; }
   if (selectedStaffUnit && page.contains(selectedStaffUnit))      { selectedStaffUnit.classList.remove("selected-unit"); selectedStaffUnit = null; }
-  if (selectedBarline   && page.contains(selectedBarline.staffUnit)) selectedBarline = null;
 
   page.remove();
   updatePageNumbers();
@@ -3223,10 +3278,10 @@ const STRINGS = {
     'palette-header-finger':    'Finger',
     'palette-header-measure':   'Measure',
     'palette-header-editing':      'Editing',
-    'palette-header-great-staff':  'Great staff',
-    'palette-btn-great-staff-add': 'Add great staff',
-    'palette-btn-great-staff-remove': 'Remove great staff',
-    'palette-measure-0':     'Free',
+    'palette-header-misc':     'Misc',
+    'palette-great-staff':     'Great staff',
+    'palette-measure-0':     '0',
+    'palette-measure-0-title': 'Remove all interior barlines',
     'palette-clear':         'Clear',
     'palette-copy':          'Copy',
     'palette-paste':         'Paste',
@@ -3264,10 +3319,10 @@ const STRINGS = {
     'palette-header-finger':    '指番号',
     'palette-header-measure':   '小節',
     'palette-header-editing':      '編集',
-    'palette-header-great-staff':  '連合譜',
-    'palette-btn-great-staff-add': '連合譜を追加',
-    'palette-btn-great-staff-remove': '連合譜を削除',
-    'palette-measure-0':     'フリー',
+    'palette-header-misc':     'その他',
+    'palette-great-staff':     '連合譜',
+    'palette-measure-0':     '0',
+    'palette-measure-0-title': '小節内の縦線をすべて削除',
     'palette-clear':         'クリア',
     'palette-copy':          'コピー',
     'palette-paste':         '貼り付け',
@@ -3334,7 +3389,7 @@ function setLanguage(lang) {
     'palette-header-technique',
     'palette-header-finger',
     'palette-header-measure',
-    'palette-header-great-staff',
+    'palette-header-misc',
     'palette-header-editing',
   ];
   document.querySelectorAll('.palette-header').forEach((el, i) => {
@@ -3343,12 +3398,12 @@ function setLanguage(lang) {
 
   // Palette buttons
   document.querySelector('[data-action="measure"][data-value="0"]').textContent   = s['palette-measure-0'];
+  document.querySelector('[data-action="measure"][data-value="0"]').title         = s['palette-measure-0-title'];
   document.querySelector('[data-action="clear"]').textContent                     = s['palette-clear'];
   document.querySelector('[data-action="editing"][data-value="copy"]').textContent  = s['palette-copy'];
   document.querySelector('[data-action="editing"][data-value="paste"]').textContent = s['palette-paste'];
   document.querySelector('[data-action="toggle-blank"]').textContent               = s['palette-toggle-blank'];
-  document.querySelector('[data-action="great-staff-add"]').title    = s['palette-btn-great-staff-add'];
-  document.querySelector('[data-action="great-staff-remove"]').title = s['palette-btn-great-staff-remove'];
+  document.querySelector('[data-action="great-staff-toggle"]').textContent       = s['palette-great-staff'];
 
   // Watermarks (existing pages)
   document.querySelectorAll('.watermark').forEach(el => {

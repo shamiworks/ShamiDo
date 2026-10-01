@@ -1,6 +1,6 @@
 ShamiDō 三味道 - ROADMAP
 ==============================
-Last updated: 2026-05-12
+Last updated: 2026-10-02
 
 Status values: NOT STARTED | IN PROGRESS | DONE
 
@@ -65,39 +65,50 @@ V1.1
 ======================================================
 V1.2
 ======================================================
+31. Editable repeat number box                     DONE
+    - Close-repeat barlines at positions 1-32 only
+    - Stored as "repeat" on the barline object; digits only, max 2
+    - Placeholder "×?"; app adds the "×"; hidden in print when empty
+35. Free barline placement                         DONE
+36. Barlines in copy/paste                         DONE
+37. Paste recorded as its own undo step            DONE
+38. Division-based barline editing                 DONE
+    - Select division k, press a barline button: acts on position k
+    - Division 1 cycles: position 0, then position 1 (mark moves), then reset
+    - Same type removes; different type changes; position 32 never removed
+    - Barline presses ignored during range selection
+    - Alt+click barline selection removed
+39. Templates as shortcuts (data-bars removed)     DONE
+    - All staff-units are free placement
+    - Buttons 2, 4, 8 replace interior barlines with normal barlines;
+      positions 0 and 32 keep their types
+    - "0" button clears interior barlines
+    - bars no longer saved; ignored on load
+    - Clearing unit content leaves barlines unchanged
+40. Great staff toggle                             DONE
+    - Single button replaces Great staff / Remove great staff
+    - Any selected unit in a group -> remove that group; otherwise add
+    - No pressed/disabled styling (consistent with other palette buttons)
+    - Palette section renamed "Misc" / "その他" for future marks
+41. Remove dimmed barline buttons                  DONE
+    - Presses still ignored during range selection; no visual change
+42. Rename remaining ShamiTab references           DONE
+    - App name is ShamiDō 三味道 (JA menubar title: 三味道)
+    - Menubar title, watermark, page titles, metadata, about pages
+      (EN and JA), README
+    - About pages and README updated to v1.2
 
+======================================================
+V1.3
+======================================================
 30. Crescendo / decrescendo marking                NOT STARTED
     - Possibly in the below zone
-31. Editable repeat number box                     NOT STARTED
-    - e.g. "×3" above close repeat barline
-    - Reduced font size
 32. Double-sided repeat barline                    NOT STARTED
     - To be confirmed
 33. Repeat measure symbol                          NOT STARTED
+    - Maybe
 34. Editable text box in above or below zone       NOT STARTED
     - For general performance notes
-35. Free barline placement                         DONE
-    - Free template only (data-bars 0)
-    - Select a division, press a barline button: barline placed at
-      right edge (position = index + 1)
-    - Pressing again on a normal barline removes it
-    - Positions 0 and 32 cannot be removed, only changed in type
-    - Alt+click selects any barline to change type
-36. Barlines in copy/paste                         DONE
-    - Whole-unit: bars and barlines pasted as-is
-    - Range: interior barlines copied and offset
-37. Paste recorded as its own undo step            DONE
-38. Division-based barline editing                 NOT STARTED
-    - Select division k, press a barline button: acts on position k
-    - Division 1 cycles: position 0, position 1, reset
-    - Same type removes; different type changes; position 32 never removed
-    - Alt+click barline selection removed
-39. Templates as shortcuts (data-bars removed)     NOT STARTED
-    - All staff-units are free placement
-    - Template buttons (2, 4, 8) replace interior barlines with normal
-      barlines at their positions; positions 0 and 32 keep their types
-    - "0" button clears interior barlines
-    - bars no longer saved; ignored on load
 
 ======================================================
 V2.0 — NEW ARCHITECTURE REQUIRED
@@ -113,3 +124,7 @@ NOTES
 - Bar counter display dropped for v1.
 - App renamed from "Tsubo Notation App" to ShamiTab, then to ShamiDō 三味道.
 - Published under ShamiWorks identity.
+- No keyboard shortcuts for barlines (infrequent during entry; palette buttons only).
+- Repeat box and finger mark can overlap above close-repeat barlines; revisit layout.
+- Bar number, part label, header and lyric fields do not record undo on blur (to decide).
+- ShamiTab name retired in v1.2: all remaining references renamed to ShamiDō 三味道.

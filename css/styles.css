@@ -306,6 +306,10 @@ body {
     background-color: #5c5248;
 }
 
+.palette-item-wide {
+    grid-column: span 2;
+}
+
 .p-dotted::after {
     content: "●";
     position: relative;
@@ -539,10 +543,6 @@ body {
   overflow: visible;
 }
 
-.barline-hit {
-  cursor: pointer;
-}
-
 .notation-layer {
   position: absolute;
   inset: 0;
@@ -627,6 +627,38 @@ body {
 
 .ha-mark {
   font-size: 8pt;
+}
+
+/* Repeat number on close-repeat barlines: right edge set inline from drawBarlines() */
+.repeat-box {
+  position: absolute;
+  top: 0;
+  height: 4mm;
+  min-width: 2mm;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  font-size: 6pt;
+  line-height: 1;
+  color: #8a8a8a;
+  white-space: nowrap;
+  outline: none;
+  z-index: 3;
+}
+
+.repeat-box::before {
+  content: "×";
+  font-size: inherit;   /* override the global *::before 11pt */
+}
+
+.repeat-box:empty::before {
+  content: "×?";
+  color: lightgrey;
+}
+
+.repeat-box:focus {
+  outline: 0.4mm solid rgba(200,160,48,0.4);
+  outline-offset: -0.2mm;
 }
 
 .finger-mark {
@@ -769,6 +801,8 @@ body {
   .staff-unit.selected-unit .staff-section { outline: none; }
 
   [data-placeholder]:empty::before { display: none; }
+
+  .repeat-box:empty { display: none; }
 
 }
 
