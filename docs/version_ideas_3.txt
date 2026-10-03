@@ -1,6 +1,6 @@
 ShamiDō 三味道 - VERSION IDEAS
 ====================================
-Last updated: 2026-10-01
+Last updated: 2026-10-03
 
 Ideas are grouped by likely version. Nothing here is committed.
 Design philosophy: the user is responsible for musical correctness.
@@ -43,8 +43,39 @@ Features that can be added without restructuring the core architecture.
 V2.0 — NEW ARCHITECTURE REQUIRED
 ======================================================
 Features that would require significant restructuring.
+Points to consider, not commitments.
 
-(Nothing identified yet)
+-- Tsubo legibility --
+- Tsubo font: BIZ UDGothic at about 10.5pt (plain zero, 0.5em digits,
+  on Google Fonts). Digits about 12% taller than IBM Plex Sans JP 10pt.
+  Safe ceiling about 11pt for any font, limited by the repeat dots, not
+  cell width. M PLUS 1 Code rejected (slashed zero). Noto Sans Mono CJK JP
+  rejected (16 MB, not on Google Fonts).
+- Repeat dot vertical margin: dots sit at 8mm and 12mm (slot boundaries);
+  a 0.1-0.2mm shift would add margin for larger digits.
+- Optional bunkafu-style condensed two-digit tsubo (scaleX or condensed
+  face) so "10" matches single-digit ink width.
+- Division cell width is 5.625mm (180mm / 32). Check the staff-section
+  width in the spec against this.
+
+-- Page layout --
+- Page count: the 32-division grid and fixed 25mm unit height limit how
+  much fits on a page. Ideas: remove or compact hidden units from layout,
+  smaller running header, smaller page margins, trimming the 1mm gap below
+  each unit, shorter lyric units. Shrinking unit height would squeeze the
+  above, clearance and below zones.
+- Screen zoom (CSS zoom on the workspace, print unaffected). Content
+  scaling (changes pagination and print layout; needs architecture change).
+
+-- Marks --
+- Triplet "3" renders at 11pt because a global `*` font-size rule overrides
+  its font-size="6" attribute. Review its size and position.
+- Triplet bracket line can pass through the maebachi mark when they share
+  divisions.
+
+-- Rendering --
+- Screen rendering looks tighter than the PDF because of pixel rounding
+  (about ±0.13mm); PDF is the accurate view.
 
 ======================================================
 DROPPED FOR V1
@@ -52,3 +83,10 @@ DROPPED FOR V1
 - Bar counter display
 - localStorage (file save/load only)
 - Logo hover dropdown (replaced by stacked title in menubar)
+
+======================================================
+DROPPED
+======================================================
+- Repeat measure symbol: redundant with the repeat number box
+- Quadruplets: considered and dropped. No bunkafu precedent found; the 4300
+  pattern is already written as plain consecutive divisions.

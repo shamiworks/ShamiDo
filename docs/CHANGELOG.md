@@ -1,5 +1,51 @@
 # ShamiDō 三味道 Changelog
 
+## v1.3
+
+### Barlines
+
+**Double-repeat barline**
+- New double-repeat barline (:‖:) with its own palette button, next to the other barline buttons
+- Select a time-division and press the button to place, change or remove a double-repeat on its right edge
+- Allowed between the first and last barlines only (positions 1–31); it has no effect on the last time-division
+- On the first time-division it toggles the barline at the end of that division and leaves the start of the measure unchanged
+- Drawn centred on the barline position: dots, thin line, thick line, thin line, dots
+- Carries an editable repeat number, like close-repeat barlines
+- Saved with the document and carried by copy/paste
+
+### Dynamics
+
+**Crescendo and decrescendo hairpins**
+- New < (crescendo) and > (decrescendo) buttons in the Misc / その他 palette section
+- Select a range of time-divisions to draw a hairpin across it, or a single time-division to cover it and the next
+- Press the same button again to remove the hairpin; press the other button to switch its direction
+- A new hairpin replaces any hairpin it overlaps
+- Drawn below the staff, clear of the maebachi mark
+- Clearing the hairpin's first time-division removes it
+- Saved with the document and carried by copy/paste (clipped to the copied range)
+- Taller hairpins: the opening is now 1.55mm (was 1.0mm), still clear of the maebachi mark
+
+### Notation
+
+**Maebachi mark**
+- The maebachi mark is now マ instead of 前, on the staff and on the palette button
+- Smaller (7pt) and placed at the top of the space below the staff
+- Display only: files are saved as before, and older files open with their maebachi marks shown as マ
+
+### Interface
+
+**Barline button order**
+- Barline buttons are now ordered Normal, Stop, Open repeat, Close repeat, Double repeat
+
+**Keyboard navigation**
+- Down from the bottom string of a staff unit now moves to the top string of the staff unit below, and Up from the top string moves to the bottom string of the staff unit above (previously the same string was kept)
+
+**Japanese tooltips**
+- Barline buttons and measure buttons (0, 2, 4, 8) now show tooltips in the selected language (EN/JA)
+
+**Instructions**
+- Barline section now notes that the double-repeat button does not cycle and works on time-divisions 1–31 only
+
 ## v1.2
 
 ### Barlines

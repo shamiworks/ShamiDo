@@ -719,7 +719,8 @@ body {
   height: 4mm;
   align-items: flex-start;
   justify-content: center;
-  font-size: 8pt;
+  font-size: 7pt;     /* マ (maebachi): ink 20.26–21.97mm from top of notation layer */
+  line-height: 1;     /* keeps the mark at the top of the zone, leaving room for hairpins */
   pointer-events: none;
 
   /* outline: 1px solid green; */
@@ -751,8 +752,7 @@ body {
 }
 
 .staff-unit.blank .staff-section,
-.staff-unit.blank .staff-metadata,
-.lyric-unit.blank {
+.staff-unit.blank .staff-metadata {
   visibility: hidden;
 }
 

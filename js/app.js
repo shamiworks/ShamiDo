@@ -78,6 +78,12 @@ function pushHistory() {
   updateUndoRedoMenu();
 }
 
+function pushHistoryIfChanged() {
+  if (isRestoring) return;
+  if (JSON.stringify(serializeDocument()) === historyStack[historyPointer]) return;
+  pushHistory();
+}
+
 function undoHistory() {
   if (historyPointer <= 0) return;
   historyPointer--;
@@ -639,13 +645,6 @@ document.addEventListener("keydown", (e) => {
   // Bypass header block
   if (isTypingInHeader()) return;
 
-  // Multi-selection clear
-  if ((e.key === "Backspace" || e.key === "Delete") && (multiDivisionSelection || multiStaffSelection)) {
-    e.preventDefault();
-    handleMultiClear();
-    return;
-  }
-
   const navKeys = ["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"];
   if (navKeys.includes(e.key) && (selectedSlot || selectedDivision)) {
     e.preventDefault();
@@ -690,13 +689,13 @@ function moveVertical(direction) {
   const timeIndex = Number(division.dataset.timeIndex);
 
   if (direction > 0) {
-    // Moving up from string 3 — find previous selectable unit
+    // Moving up from string 3 — find previous selectable unit; land on its bottom string (1)
     for (let i = currentUnitIndex - 1; i >= 0; i--) {
       const unit = allUnits[i];
       if (unit.classList.contains("staff-unit")) {
         const layer = unit.querySelector(".notation-layer");
         const targetDiv = layer?.querySelector(`.time-division[data-time-index="${timeIndex}"]`);
-        const slot = targetDiv?.querySelector('.string-slot[data-string="3"]');
+        const slot = targetDiv?.querySelector('.string-slot[data-string="1"]');
         if (slot) selectSlot(slot);
         return;
       }
@@ -712,13 +711,13 @@ function moveVertical(direction) {
       }
     }
   } else {
-    // Moving down from string 1 — find next selectable unit
+    // Moving down from string 1 — find next selectable unit; land on its top string (3)
     for (let i = currentUnitIndex + 1; i < allUnits.length; i++) {
       const unit = allUnits[i];
       if (unit.classList.contains("staff-unit")) {
         const layer = unit.querySelector(".notation-layer");
         const targetDiv = layer?.querySelector(`.time-division[data-time-index="${timeIndex}"]`);
-        const slot = targetDiv?.querySelector('.string-slot[data-string="1"]');
+        const slot = targetDiv?.querySelector('.string-slot[data-string="3"]');
         if (slot) selectSlot(slot);
         return;
       }
@@ -869,7 +868,26 @@ function navigateFromLyricUp(lyricUnit) {
   }
 }
 
-function handleMultiClear() {
+// Single clear path: Backspace, Delete and the palette Clear button all land here
+function handleClear() {
+  if (multiDivisionSelection || multiStaffSelection) {
+    clearMultiSelectionContent();
+    pushHistoryIfChanged();
+    return;
+  }
+  if (!selectedDivision) return; // a single clicked unit stays non-clearable
+
+  if (selectedDivision.dataset.triplet) {
+    commitTriplet(selectedDivision);
+  } else if (selectedSlot) {
+    commitClearSlot(selectedSlot);
+  } else {
+    commitClearDivision(selectedDivision);
+  }
+  pushHistoryIfChanged();
+}
+
+function clearMultiSelectionContent() {
   if (multiDivisionSelection) {
     const { staffUnit, startIndex, endIndex } = multiDivisionSelection;
     const lo = Math.min(startIndex, endIndex);
@@ -905,6 +923,8 @@ function handleCopy() {
         return idx >= lo && idx <= hi;
       })
       .map(serializeTimeDivision);
+    // Hairpins starting in the range are clipped to the end of the range
+    data.forEach((d, i) => clipDynamic(d, data.length - i));
     // Interior barlines (lo+1 .. hi), stored relative to the range start
     const barlines = JSON.parse(staffUnit.dataset.barlines || "[]")
       .filter(b => b.pos > lo && b.pos <= hi)
@@ -921,7 +941,9 @@ function handleCopy() {
     return;
   }
   if (selectedDivision) {
-    clipboard = { type: "divisions", data: [serializeTimeDivision(selectedDivision)] };
+    const data = [serializeTimeDivision(selectedDivision)];
+    clipDynamic(data[0], 1);   // a one-division copy can't carry a hairpin
+    clipboard = { type: "divisions", data };
   }
 }
 
@@ -941,10 +963,21 @@ function handlePaste() {
     const allDivisions = Array.from(layer.querySelectorAll(".time-division"));
     clipboard.data.forEach((divData, i) => {
       const target = allDivisions.find(d => Number(d.dataset.timeIndex) === startIdx + i);
-      if (target) { clearDivisionFully(target); restoreTimeDivision(target, divData); }
+      if (!target) return;
+      // Hairpins are clipped to the unit end (index 31)
+      const data = { ...divData };
+      clipDynamic(data, 32 - (startIdx + i));
+      clearDivisionFully(target);
+      restoreTimeDivision(target, data);
     });
     const staffUnit = layer.closest(".staff-unit");
     if (staffUnit) {
+      // A pasted hairpin replaces any existing one it overlaps (from outside the paste range)
+      const endIdx = startIdx + clipboard.data.length - 1;
+      const spans = getDynamicSpans(staffUnit);
+      const pasted = spans.filter(s => s.start >= startIdx && s.start <= endIdx);
+      spans.filter(s => s.start < startIdx && pasted.some(p => s.start <= p.end && s.end >= p.start))
+        .forEach(s => removeDynamic(s.div));
       renderArcLayer(staffUnit);
       pasteRangeBarlines(staffUnit, startIdx, clipboard.data.length, clipboard.barlines || []);
     }
@@ -1015,12 +1048,8 @@ let pendingValue = "";
 let pendingTimer = null;
 const UPGRADE_WINDOW = 600; // ms
 const DURATION_UNDERLINE_ROTATION = [null, "single", "double"];
-let currentDurationUnderline = null;
-let lastDurationDivision = null;
 
 const FINGER_ROTATION = [null, "first", "second", "third"];
-let currentFinger = null;
-let lastFingerDivision = null;
 
 document.addEventListener("keydown", (e) => {
   if (isTypingInHeader()) return;
@@ -1036,10 +1065,18 @@ document.addEventListener("keydown", (e) => {
     return;
   }
 
-  if (!selectedSlot && !selectedDivision) return;
+  if (!selectedSlot && !selectedDivision && !multiDivisionSelection && !multiStaffSelection) return;
 
   const intent = keyToIntent(e);
   if (!intent) return;
+
+  if (intent.action === "clear") {
+    e.preventDefault();
+    handleClear();
+    return;
+  }
+
+  if (!selectedSlot && !selectedDivision) return;
 
   // UI-only actions
   if (intent.action === "deselect") {
@@ -1055,39 +1092,26 @@ document.addEventListener("keydown", (e) => {
 
   // Duration handling
   if (intent.action === "duration-underline-rotate") {
-    if (selectedDivision !== lastDurationDivision) {
-      currentDurationUnderline = null;
-      lastDurationDivision = selectedDivision;
-    }
-
-    currentDurationUnderline = rotateValue(
-      currentDurationUnderline,
-      DURATION_UNDERLINE_ROTATION
-    );
+    if (!selectedDivision) return;
+    const current = selectedDivision.dataset.durationUnderline ?? null;
 
     dispatchCommit({
       source: "keyboard",
       action: "duration-underline",
-      value: currentDurationUnderline
+      value: rotateValue(current, DURATION_UNDERLINE_ROTATION)
     });
+    return;
   }
 
   // Finger handling
   if (intent.action === "finger-rotate") {
-    if (selectedDivision !== lastFingerDivision) {
-      currentFinger = null;
-      lastFingerDivision = selectedDivision;
-    }
-
-    currentFinger = rotateValue(
-      currentFinger,
-      FINGER_ROTATION
-    );
+    if (!selectedDivision) return;
+    const current = selectedDivision.dataset.finger ?? null;
 
     dispatchCommit({
       source: "keyboard",
       action: "finger",
-      value: currentFinger
+      value: rotateValue(current, FINGER_ROTATION)
     });
 
     return;
@@ -1195,7 +1219,7 @@ function keyToIntent(e) {
     return { action: "deselect" };
   }
 
-  if (e.key === "Backspace") {
+  if (e.key === "Backspace" || e.key === "Delete") {
     return { action: "clear" };
   }
 
@@ -1274,19 +1298,23 @@ function handlePaletteInput(btn) {
 
   if (!action) return;
 
-  // Sync keyboard rotation state with explicit palette choice
-  if (action === "duration-underline") {
-    currentDurationUnderline = value;
-    lastDurationDivision = selectedDivision;
+  if (action === "clear") { handleClear(); return; }
+
+  // Second press of the same palette choice removes it
+  if (selectedDivision) {
+    if (action === "duration-underline" && selectedDivision.dataset.durationUnderline === value) {
+      value = null;
+    }
+    if (action === "finger" && selectedDivision.dataset.finger === value) {
+      value = null;
+    }
   }
 
   if (action === "duration-empty") {
+    if (!selectedDivision) return;
     commitClearDuration(selectedDivision);
-  }
-
-  if (action === "finger") {
-    currentFinger = value;
-    lastFingerDivision = selectedDivision;
+    pushHistoryIfChanged();
+    return;
   }
 
   // Copy / Paste from palette
@@ -1341,6 +1369,11 @@ function dispatchCommit(intent) {
     return;
   }
 
+  if (intent.action === "dynamic") {
+    if (commitDynamic(intent.value)) pushHistory();
+    return;
+  }
+
   if (intent.action === "great-staff-toggle") {
     if (commitGreatStaffToggle()) pushHistory();
     return;
@@ -1355,7 +1388,11 @@ function dispatchCommit(intent) {
       break;
 
     case "rest":
-      commitRest(selectedDivision);
+      if (getRestSlot(selectedDivision).classList.contains("has-rest")) {
+        commitClearRest(selectedDivision);
+      } else {
+        commitRest(selectedDivision);
+      }
       break;
 
     case "durationDot":
@@ -1409,17 +1446,6 @@ function dispatchCommit(intent) {
     case "finger":
       commitFinger(selectedDivision, intent.value);
       break;
-
-    case "clear":
-      if (selectedDivision.dataset.triplet) {
-        commitTriplet(selectedDivision);
-      } else if (selectedSlot) {
-        commitClearSlot(selectedSlot);
-      } else {
-        commitClearDivision(selectedDivision);
-      }
-      break;
-      
 
     case "deselect":
       deselectAll();
@@ -1679,7 +1705,7 @@ function commitMaebachi(division) {
 
   const isNowOn = toggleDatasetFlag(division, "maebachi");
 
-  zone.innerHTML = isNowOn ? "前" : "";
+  zone.innerHTML = isNowOn ? "マ" : "";
 }
 
 function commitHa(division) {
@@ -1967,6 +1993,104 @@ function renderArcLayer(staffBlock) {
     svg.appendChild(leftPath);
     svg.appendChild(rightPath);
   });
+
+  // --- Dynamics (crescendo / decrescendo hairpins), lower edge of the below zone ---
+  divisions.forEach((division, startIndex) => {
+    const type = division.dataset.dynamic;
+    const len  = Number(division.dataset.dynamicLength);
+    if (!type || !(len >= 2)) return;
+
+    const last  = divisions[startIndex + len - 1];
+    const below = division.querySelector(".below-zone");
+    if (!last || !below) return;
+
+    const layerRect = svg.closest(".notation-layer").getBoundingClientRect();
+    const mm = layerRect.width / 180;   // px per mm
+    const r1 = division.getBoundingClientRect();
+    const r2 = last.getBoundingClientRect();
+
+    const x1   = r1.left  - layerRect.left + HAIRPIN.inset * mm;
+    const x2   = r2.right - layerRect.left - HAIRPIN.inset * mm;
+    const midY = below.getBoundingClientRect().top - layerRect.top + HAIRPIN.centreY * mm;
+    const half = (HAIRPIN.opening / 2) * mm;
+
+    // Crescendo: tip on the left, opens to the right. Decrescendo: the reverse.
+    const [tipX, openX] = type === "cresc" ? [x1, x2] : [x2, x1];
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d",
+      `M ${tipX} ${midY} L ${openX} ${midY - half} M ${tipX} ${midY} L ${openX} ${midY + half}`
+    );
+    path.setAttribute("fill", "none");
+    path.setAttribute("stroke", "black");
+    path.setAttribute("stroke-width", "1");
+    path.classList.add("dynamic-hairpin");
+    svg.appendChild(path);
+  });
+}
+
+// Hairpin geometry in mm, relative to the top of the below zone (zone is 4mm tall).
+// Lines at 2.317 and 3.865 (tip 3.091): with the 0.265mm stroke the lower edge stays
+// inside the zone and the upper edge clears マ (ink ends 1.98 below the zone top) by
+// 0.2mm and the triplet bracket line (at 2.0) by 0.05mm.
+const HAIRPIN = { centreY: 3.091, opening: 1.548, inset: 0.8 };
+
+// Hairpins are stored on their start division: data-dynamic + data-dynamic-length
+function getDynamicSpans(staffUnit) {
+  return Array.from(staffUnit.querySelectorAll(".time-division"))
+    .filter(div => div.dataset.dynamic)
+    .map(div => {
+      const start = Number(div.dataset.timeIndex);
+      return { div, start, end: start + Number(div.dataset.dynamicLength) - 1 };
+    });
+}
+
+function removeDynamic(div) {
+  delete div.dataset.dynamic;
+  delete div.dataset.dynamicLength;
+}
+
+// Range: spans the selection. Single division: it and the next (division 32 → 31-32).
+// Same type on the same span removes; other type converts; overlapping hairpins are replaced.
+// Returns true if the unit changed.
+function commitDynamic(type) {
+  if (multiStaffSelection) return false;
+
+  let staffUnit, start, end;
+  if (multiDivisionSelection) {
+    staffUnit = multiDivisionSelection.staffUnit;
+    start = Math.min(multiDivisionSelection.startIndex, multiDivisionSelection.endIndex);
+    end   = Math.max(multiDivisionSelection.startIndex, multiDivisionSelection.endIndex);
+  } else if (selectedDivision) {
+    staffUnit = selectedDivision.closest(".staff-unit");
+    start = end = Number(selectedDivision.dataset.timeIndex);
+  } else {
+    return false;
+  }
+  if (!staffUnit || !staffUnit.isConnected) return false;
+  if (start === end) { start = Math.min(start, 30); end = start + 1; }
+
+  const spans = getDynamicSpans(staffUnit);
+  const same  = spans.find(s => s.start === start && s.end === end);
+  if (same) {
+    if (same.div.dataset.dynamic === type) removeDynamic(same.div);
+    else same.div.dataset.dynamic = type;
+  } else {
+    spans.filter(s => s.start <= end && s.end >= start).forEach(s => removeDynamic(s.div));
+    const startDiv = staffUnit.querySelector(`.time-division[data-time-index="${start}"]`);
+    startDiv.dataset.dynamic = type;
+    startDiv.dataset.dynamicLength = String(end - start + 1);
+  }
+
+  renderArcLayer(staffUnit);
+  return true;
+}
+
+// Clip copied/pasted hairpins: length limited to `maxLen`; dropped below 2
+function clipDynamic(data, maxLen) {
+  if (!data.dynamic) return;
+  const n = Math.min(Number(data.dynamicLength), maxLen);
+  if (n >= 2) data.dynamicLength = String(n);
+  else { delete data.dynamic; delete data.dynamicLength; }
 }
 
 function renderTripletBrackets() {
@@ -2068,6 +2192,15 @@ function commitClearRest(division) {
 function commitClearDivision(division) {
   if (!division) return;
 
+  // Hidden-but-saved marks: remove flags and glyphs before the slots are wiped
+  for (const key of ["ha", "maebachi", "sukui", "hajiki", "keshi", "uchi"]) {
+    delete division.dataset[key];
+  }
+  const below = division.querySelector(".below-zone");
+  if (below) below.innerHTML = "";
+  division.querySelectorAll(".sukui-mark, .hajiki-mark, .keshi-mark, .uchi-mark")
+    .forEach(el => el.remove());
+
   getStringSlots(division).forEach(commitClearSlot);
   commitClearRest(division);
   commitClearDuration(division);
@@ -2082,6 +2215,9 @@ function commitClearDivision(division) {
   delete division.dataset.techArcString;
   delete division.dataset.techArcOffset;
   delete division.dataset.techArcArmed;
+
+  // Clearing the start division removes its hairpin
+  removeDynamic(division);
 
   const staffUnit = division.closest(".staff-unit");
   if (staffUnit) renderArcLayer(staffUnit);
@@ -2123,6 +2259,9 @@ function isTypingInHeader() {
 */
 
 // Barlines
+// Barline types that carry an editable repeat number
+const REPEAT_NUMBER_TYPES = ["close-repeat", "double-repeat"];
+
 function buildDefaultBarlines(bars) {
   const positions = [0, ...(BAR_TEMPLATES[bars] || []), 32];
   return positions.map(p => ({ pos: p }));
@@ -2186,6 +2325,17 @@ function drawBarlines(staffBlock) {
         g.appendChild(makeLine(x + thickOff,  y1, y2, color, `${thick}mm`));
         break;
 
+      case "double-repeat":
+        // dots → gap → thin → gap → thick (centred on position, shared) → gap → thin → gap → dots
+        g.appendChild(makeCircle(x - thickOff - dotOff,  8, dotR, color));
+        g.appendChild(makeCircle(x - thickOff - dotOff, 12, dotR, color));
+        g.appendChild(makeLine(x - thickOff,  y1, y2, color, `${thin}mm`));
+        g.appendChild(makeLine(x,             y1, y2, color, `${thick}mm`));
+        g.appendChild(makeLine(x + thickOff,  y1, y2, color, `${thin}mm`));
+        g.appendChild(makeCircle(x + thickOff + dotOff,  8, dotR, color));
+        g.appendChild(makeCircle(x + thickOff + dotOff, 12, dotR, color));
+        break;
+
       case "normal":
       default:
         g.appendChild(makeLine(x, y1, y2, color, `${thin}mm`));
@@ -2195,12 +2345,12 @@ function drawBarlines(staffBlock) {
     svg.appendChild(g);
   });
 
-  // Repeat number boxes (close-repeat at positions 1-32), overlaid on the notation layer
+  // Repeat number boxes (close-repeat / double-repeat at positions 1-32), overlaid on the notation layer
   const layer = staffBlock.querySelector(".notation-layer");
   if (!layer) return;
   layer.querySelectorAll(".repeat-box").forEach(el => el.remove());
   data.forEach(bar => {
-    if (bar.type === "close-repeat" && bar.pos >= 1) {
+    if (REPEAT_NUMBER_TYPES.includes(bar.type) && bar.pos >= 1) {
       layer.appendChild(createRepeatBox(staffBlock, bar));
     }
   });
@@ -2379,7 +2529,12 @@ function commitBarlineType(division, type) {
     barlines.push(bar);
   };
 
-  if (k === 1) {
+  if (type === "double-repeat") {
+    // Positions 1-31 only, plain toggle on the right edge (no division-1 cycle; position 0 untouched)
+    if (k === 32) return false;
+    if (typeAt(k) !== type) set(k, type);
+    else                    remove(k);
+  } else if (k === 1) {
     if (typeAt(1) === type)      { remove(1); set(0, "normal"); }
     else if (typeAt(0) === type) { set(0, "normal"); set(1, type); }
     else                         set(0, type);
@@ -2467,7 +2622,7 @@ function updateBlankButton() {
     const lo = Math.min(allStaff.indexOf(startUnit), allStaff.indexOf(endUnit));
     firstUnit = allStaff[lo];
   } else {
-    firstUnit = selectedStaffUnit || document.activeElement?.closest('.lyric-unit');
+    firstUnit = selectedStaffUnit;
   }
   btn.textContent = firstUnit?.classList.contains('blank') ? s['palette-toggle-show'] : s['palette-toggle-blank'];
 }
@@ -2485,7 +2640,7 @@ function commitToggleBlank() {
       if (makeBlank) { u.dataset.blank = 'true'; } else { delete u.dataset.blank; }
     });
   } else {
-    const unit = selectedStaffUnit || document.activeElement?.closest('.lyric-unit');
+    const unit = selectedStaffUnit;
     if (!unit) return;
     const isBlank = unit.classList.toggle('blank');
     if (isBlank) { unit.dataset.blank = 'true'; } else { delete unit.dataset.blank; }
@@ -2795,6 +2950,12 @@ function serializeTimeDivision(div) {
   // Triplet
   if (div.dataset.triplet) obj.triplet = div.dataset.triplet;
 
+  // Dynamic (hairpin), stored on its start division
+  if (div.dataset.dynamic) {
+    obj.dynamic       = div.dataset.dynamic;
+    obj.dynamicLength = div.dataset.dynamicLength;
+  }
+
   return obj;
 }
 
@@ -2814,9 +2975,7 @@ function serializeLyricUnit(block) {
   block.querySelectorAll(".lyric-line").forEach((line, i) => {
     if (i < 3) lines[i] = line.textContent;
   });
-  const result = { type: "lyric-unit", lines };
-  if (block.dataset.blank === 'true') result.blank = true;
-  return result;
+  return { type: "lyric-unit", lines };
 }
 
 function getFilename() {
@@ -2946,7 +3105,7 @@ function restoreStaffUnit(staffUnit, block) {
   const internalBarlines = (block.barlines || []).map(b => {
     const obj = { pos: b.position };
     if (b.type && b.type !== "normal") obj.type = b.type;
-    if (b.repeat && b.type === "close-repeat" && b.position >= 1) obj.repeat = String(b.repeat);
+    if (b.repeat && REPEAT_NUMBER_TYPES.includes(b.type) && b.position >= 1) obj.repeat = String(b.repeat);
     return obj;
   });
   staffUnit.dataset.barlines = JSON.stringify(internalBarlines);
@@ -3026,6 +3185,16 @@ function restoreTimeDivision(div, data) {
     div.dataset.triplet = data.triplet;
     div.classList.add("triplet-active");
   }
+
+  // 7. Dynamic (hairpin) — drawn by renderArcLayer. Invalid type, length < 2
+  //    or a span running past index 31 is ignored.
+  const dynLen = Number(data.dynamicLength);
+  if ((data.dynamic === "cresc" || data.dynamic === "decresc") &&
+      Number.isInteger(dynLen) && dynLen >= 2 &&
+      Number(div.dataset.timeIndex) + dynLen - 1 <= 31) {
+    div.dataset.dynamic       = data.dynamic;
+    div.dataset.dynamicLength = String(dynLen);
+  }
 }
 
 function restoreLyricUnit(unit, block) {
@@ -3033,10 +3202,7 @@ function restoreLyricUnit(unit, block) {
   unit.querySelectorAll(".lyric-line").forEach((line, i) => {
     if (i < lines.length) line.textContent = lines[i];
   });
-  if (block.blank) {
-    unit.classList.add('blank');
-    unit.dataset.blank = 'true';
-  }
+  // Older files may carry a lyric "blank" flag; it is ignored
 }
 
 
@@ -3086,9 +3252,12 @@ function clearDivisionFully(div) {
   delete div.dataset.techArc;
   delete div.dataset.techArcString;
   delete div.dataset.techArcOffset;
+  delete div.dataset.techArcArmed;
 
   delete div.dataset.triplet;
   div.classList.remove("triplet-active");
+
+  removeDynamic(div);
 }
 
 // Clear all notation content in a staff unit (barlines are left as-is)
@@ -3115,6 +3284,7 @@ document.getElementById("clear-page").addEventListener("click", () => {
   page.querySelectorAll(".lyric-unit .lyric-line").forEach(line => {
     line.textContent = "";
   });
+  pushHistoryIfChanged();
 });
 
 document.getElementById("delete-page").addEventListener("click", () => {
@@ -3282,6 +3452,16 @@ const STRINGS = {
     'palette-great-staff':     'Great staff',
     'palette-measure-0':     '0',
     'palette-measure-0-title': 'Remove all interior barlines',
+    'palette-measure-2-title': '2 measures',
+    'palette-measure-4-title': '4 measures',
+    'palette-measure-8-title': '8 measures',
+    'palette-barline-normal-title':        'Normal barline',
+    'palette-barline-open-repeat-title':   'Open repeat',
+    'palette-barline-close-repeat-title':  'Close repeat',
+    'palette-barline-stop-title':          'Stop barline',
+    'palette-barline-double-repeat-title': 'Double repeat',
+    'palette-dynamic-cresc-title':   'Crescendo',
+    'palette-dynamic-decresc-title': 'Decrescendo',
     'palette-clear':         'Clear',
     'palette-copy':          'Copy',
     'palette-paste':         'Paste',
@@ -3322,7 +3502,17 @@ const STRINGS = {
     'palette-header-misc':     'その他',
     'palette-great-staff':     '連合譜',
     'palette-measure-0':     '0',
-    'palette-measure-0-title': '小節内の縦線をすべて削除',
+    'palette-measure-0-title': '内部の小節線なし',
+    'palette-measure-2-title': '16分割ごとに小節線（2小節）',
+    'palette-measure-4-title': '8分割ごとに小節線（4小節）',
+    'palette-measure-8-title': '4分割ごとに小節線（8小節）',
+    'palette-barline-normal-title':        '通常の小節線',
+    'palette-barline-open-repeat-title':   '反復開始記号',
+    'palette-barline-close-repeat-title':  '反復終了記号',
+    'palette-barline-stop-title':          '終止線',
+    'palette-barline-double-repeat-title': '両側反復記号',
+    'palette-dynamic-cresc-title':   'クレッシェンド',
+    'palette-dynamic-decresc-title': 'デクレッシェンド',
     'palette-clear':         'クリア',
     'palette-copy':          'コピー',
     'palette-paste':         '貼り付け',
@@ -3398,7 +3588,15 @@ function setLanguage(lang) {
 
   // Palette buttons
   document.querySelector('[data-action="measure"][data-value="0"]').textContent   = s['palette-measure-0'];
-  document.querySelector('[data-action="measure"][data-value="0"]').title         = s['palette-measure-0-title'];
+  ["0", "2", "4", "8"].forEach(v => {
+    document.querySelector(`[data-action="measure"][data-value="${v}"]`).title = s[`palette-measure-${v}-title`];
+  });
+  ["normal", "open-repeat", "close-repeat", "stop", "double-repeat"].forEach(t => {
+    document.querySelector(`[data-action="barline-type"][data-value="${t}"]`).title = s[`palette-barline-${t}-title`];
+  });
+  ["cresc", "decresc"].forEach(t => {
+    document.querySelector(`[data-action="dynamic"][data-value="${t}"]`).title = s[`palette-dynamic-${t}-title`];
+  });
   document.querySelector('[data-action="clear"]').textContent                     = s['palette-clear'];
   document.querySelector('[data-action="editing"][data-value="copy"]').textContent  = s['palette-copy'];
   document.querySelector('[data-action="editing"][data-value="paste"]').textContent = s['palette-paste'];

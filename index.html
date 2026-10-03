@@ -186,7 +186,7 @@
         <button type="button" class="palette-btn" data-action="suri" title="i">スリ</button>
       </div>
       <div class="palette-item">
-        <button type="button" class="palette-btn" data-action="maebachi" data-value="mae" title="m">前</button>
+        <button type="button" class="palette-btn" data-action="maebachi" data-value="mae" title="m">マ</button>
       </div>
       <div class="palette-item">
         <button type="button" class="palette-btn" data-action="ha" title="a">Ha!</button>
@@ -218,6 +218,9 @@
         <button type="button" class="palette-btn" data-action="measure" data-value="8" title="8 measures">8</button>
       </div>
       <div class="palette-item">
+        <button type="button" class="palette-btn palette-bar-line" data-action="barline-type" data-value="normal" title="Normal barline">𝄀</button>
+      </div>
+      <div class="palette-item">
         <button type="button" class="palette-btn palette-bar-line" data-action="barline-type" data-value="stop" title="Stop barline">𝄁</button>
       </div>
       <div class="palette-item">
@@ -227,11 +230,17 @@
         <button type="button" class="palette-btn palette-bar-line" data-action="barline-type" data-value="close-repeat" title="Close repeat">𝄇</button>
       </div>
       <div class="palette-item">
-        <button type="button" class="palette-btn palette-bar-line" data-action="barline-type" data-value="normal" title="Normal barline">𝄀</button>
+        <button type="button" class="palette-btn palette-bar-line" data-action="barline-type" data-value="double-repeat" title="Double repeat">:‖:</button>
       </div>
       <div class="palette-header">Misc</div>
       <div class="palette-item palette-item-wide">
         <button type="button" class="palette-btn" data-action="great-staff-toggle">Great staff</button>
+      </div>
+      <div class="palette-item">
+        <button type="button" class="palette-btn" data-action="dynamic" data-value="cresc" title="Crescendo">&lt;</button>
+      </div>
+      <div class="palette-item">
+        <button type="button" class="palette-btn" data-action="dynamic" data-value="decresc" title="Decrescendo">&gt;</button>
       </div>
       <div class="palette-header">Editing</div>
       <div class="palette-item">
@@ -268,7 +277,7 @@
     <p data-en="Click anywhere on a staff unit to select it — the unit is outlined when selected. Then click 0, 2, 4, or 8 in the palette." data-ja="スタッフ・ユニットをクリックして選択すると、枠で囲まれた状態になります。パレットの「0」「2」「4」「8」をクリックして小節数を変更します。">Click anywhere on a staff unit to select it — the unit is outlined when selected. Then click 0, 2, 4, or 8 in the palette.</p>
  
     <h2 data-en="Changing barline types" data-ja="縦線の種類の変更">Changing barline types</h2>
-    <p data-en="Select a time division and press a barline button to place, change or remove the barline on its right edge. On the first time division, repeated presses cycle through the start of the measure. The 2, 4 and 8 buttons set the interior barlines, and 0 removes them. Copying a range of time divisions includes the barlines within it." data-ja="タイム・ディビジョンを選択して縦線ボタンを押すと、その右端の縦線を配置・変更・削除できます。最初のタイム・ディビジョンでは、ボタンを繰り返し押すと小節の始まりの縦線が順に切り替わります。「2」「4」「8」ボタンで小節内の縦線を設定し、「0」で削除します。タイム・ディビジョンの範囲をコピーすると、範囲内の縦線も含まれます。">Select a time division and press a barline button to place, change or remove the barline on its right edge. On the first time division, repeated presses cycle through the start of the measure. The 2, 4 and 8 buttons set the interior barlines, and 0 removes them. Copying a range of time divisions includes the barlines within it.</p>
+    <p data-en="Select a time division and press a barline button to place, change or remove the barline on its right edge. On the first time division, repeated presses cycle through the start of the measure. The double-repeat button does not cycle and works on time divisions 1 to 31 only. The 2, 4 and 8 buttons set the interior barlines, and 0 removes them. Copying a range of time divisions includes the barlines within it." data-ja="タイム・ディビジョンを選択して縦線ボタンを押すと、その右端の縦線を配置・変更・削除できます。最初のタイム・ディビジョンでは、ボタンを繰り返し押すと小節の始まりの縦線が順に切り替わります。両側反復記号のボタンは順に切り替わらず、1〜31番目のタイム・ディビジョンでのみ使用できます。「2」「4」「8」ボタンで小節内の縦線を設定し、「0」で削除します。タイム・ディビジョンの範囲をコピーすると、範囲内の縦線も含まれます。">Select a time division and press a barline button to place, change or remove the barline on its right edge. On the first time division, repeated presses cycle through the start of the measure. The double-repeat button does not cycle and works on time divisions 1 to 31 only. The 2, 4 and 8 buttons set the interior barlines, and 0 removes them. Copying a range of time divisions includes the barlines within it.</p>
  
     <h2 data-en="Suri and oshibachi" data-ja="スリとオシバチ">Suri and oshibachi</h2>
     <p data-en="Select a string slot and press I for suri or O for oshibachi. A placeholder arc appears immediately. Enter the start and end tsubo in any order — the arc anchors to the start tsubo and extends to the nearest entered tsubo. Both tsubo must be in the same staff unit. To remove an arc, select the start tsubo slot and press Backspace, or use Clear in the palette." data-ja="糸スロットを選択し、スリは I キー、オシバチは O キーを押します。すぐにプレースホルダーのアークが表示されます。起点と目標のツボはどちらの順で入力しても構いません。アークは起点ツボに固定され、最も近いツボまで伸びます。2つのツボは同じスタッフ・ユニット内にある必要があります。アークを削除するには、起点ツボスロットを選択して Backspace キーを押すか、パレットの「クリア」を使用します。">Select a string slot and press I for suri or O for oshibachi. A placeholder arc appears immediately. Enter the start and end tsubo in any order — the arc anchors to the start tsubo and extends to the nearest entered tsubo. Both tsubo must be in the same staff unit. To remove an arc, select the start tsubo slot and press Backspace, or use Clear in the palette.</p>
@@ -286,7 +295,7 @@
     <p data-en="Select two or more adjacent staff units, then click Great staff in the palette. A continuous barline is drawn connecting the units, indicating simultaneous parts. To remove, select any unit within the group and click Great staff again." data-ja="隣接する2つ以上のスタッフ・ユニットを選択し、パレットの「連合譜」をクリックします。ユニットをつなぐ連続した縦線が描かれ、同時演奏パートであることを示します。解除するには、グループ内のいずれかのユニットを選択して、もう一度「連合譜」をクリックします。">Select two or more adjacent staff units, then click Great staff in the palette. A continuous barline is drawn connecting the units, indicating simultaneous parts. To remove, select any unit within the group and click Great staff again.</p>
  
     <h2 data-en="Hiding units" data-ja="ユニットの非表示">Hiding units</h2>
-    <p data-en="Select a staff unit or lyric unit and click Hide in the palette. The unit becomes invisible but still occupies its space on the page. Click the unit's outline to select it again and click Show to make it visible. Works with multiple selected units." data-ja="スタッフ・ユニットまたはリリック・ユニットを選択し、パレットの「非表示」をクリックします。ユニットは見えなくなりますが、ページ上の位置はそのまま保持されます。ユニットの枠をクリックして再選択し、「表示」をクリックすると再び表示されます。複数のユニットを選択した状態でも使用できます。">Select a staff unit or lyric unit and click Hide in the palette. The unit becomes invisible but still occupies its space on the page. Click the unit's outline to select it again and click Show to make it visible. Works with multiple selected units.</p>
+    <p data-en="Select a staff unit and click Hide in the palette. The unit becomes invisible but still occupies its space on the page. Click the unit's outline to select it again and click Show to make it visible. Works with multiple selected units." data-ja="スタッフ・ユニットを選択し、パレットの「非表示」をクリックします。ユニットは見えなくなりますが、ページ上の位置はそのまま保持されます。ユニットの枠をクリックして再選択し、「表示」をクリックすると再び表示されます。複数のユニットを選択した状態でも使用できます。">Select a staff unit and click Hide in the palette. The unit becomes invisible but still occupies its space on the page. Click the unit's outline to select it again and click Show to make it visible. Works with multiple selected units.</p>
  
     <h2 data-en="Keyboard shortcuts" data-ja="キーボード・ショートカット">Keyboard shortcuts</h2>
     <table class="shortcut-table">

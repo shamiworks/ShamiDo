@@ -1,6 +1,6 @@
 ShamiDō 三味道 - SPECIFICATION
 ====================================
-Last updated: 2026-10-02
+Last updated: 2026-10-03
 
 ======================================================
 FONTS
@@ -166,6 +166,8 @@ dataset:
   data-tech-arc-string    string number | absent
   data-tech-arc-offset    division offset to target | absent
   data-triplet            "1" | "2" | "3" | absent
+  data-dynamic            "cresc" | "decresc" | absent   (hairpin start division only)
+  data-dynamic-length     number of divisions, >= 2 | absent
 
 Note: data-tech-arc and data-tech-arc-armed are mutually exclusive.
       data-tech-arc-armed draws a placeholder arc to the next division
@@ -206,7 +208,9 @@ String slot states:
   (anchored to bottom-most active string slot)
 
 -- Below Zone --
-  "前" text (maebachi) | empty
+  "マ" text (maebachi) | empty   (same mark in EN and JA; data-maebachi unchanged)
+  7pt, line-height 1, top-aligned: マ ink occupies y 20.26–21.97mm (zone is 20–24mm)
+  Hairpins are drawn in the lower part of the zone (see Arc Layer)
 
 -- Arc Layer --
   Oshibachi and suri drawn as SVG paths
@@ -214,6 +218,15 @@ String slot states:
   Armed arcs: placeholder drawn from start string slot to next
               division's same string (suri) or next string (oshibachi)
   Triplet bracket drawn as right-angled SVG path below staff
+    (y 20–22mm, "3" centred at 22mm)
+  Dynamic hairpins (crescendo <, decrescendo >): two straight lines from a tip
+    y positions (mm from top of notation layer): tip 23.09, lines 22.32 and 23.87
+    (HAIRPIN = { centreY: 3.091, opening: 1.548, inset: 0.8 }, relative to the below zone top)
+    opening 1.55mm; inset 0.8mm from the span's outer division edges
+    stroke black, width 1 (0.265mm; same as arcs and triplet brackets)
+    lower edge stays inside the zone; upper edge clears マ by 0.2mm
+    and the triplet bracket line (22.0mm) by 0.05mm
+    the triplet "3" (computed 11pt) overlaps the hairpin by up to 0.9mm (accepted)
 
 ======================================================
 SURI / OSHIBACHI WORKFLOW
@@ -246,8 +259,9 @@ Clearing:
 BARLINES
 ======================================================
 Every staff-unit is free placement. There is no per-unit template mode.
-Each barline: { "position": <0-32>, "type": "normal" | "open-repeat" | "close-repeat" | "stop", "repeat": "<digits>" }
-  "repeat" only on close-repeat at positions 1-32; omitted when empty.
+Each barline: { "position": <0-32>, "type": "normal" | "open-repeat" | "close-repeat" | "double-repeat" | "stop", "repeat": "<digits>" }
+  "repeat" only on close-repeat (positions 1-32) and double-repeat (positions 1-31); omitted when empty.
+  double-repeat only at positions 1-31.
 Positions 0 and 32 always exist and are never removed.
 Barline colour: #d3d3d3
 Barlines are not directly clickable. They are edited through the
@@ -269,11 +283,25 @@ barline button of type X pressed. Acts on the right edge, position k:
     position 1 is X -> remove position 1, set position 0 to normal
     else position 0 is X -> set position 0 to normal, place/change X at position 1
     else -> set position 0 to X
+    (a double-repeat at position 1 is replaced as "different type -> change")
+  X = double-repeat (exception, no cycle):
+    k = 1..31: plain toggle at position k (no barline -> place,
+      different type -> change, same type -> remove); position 0 never touched
+    k = 32: no effect
   Barline button presses are ignored while a multi-division range is selected
   (no visual change to the buttons).
   Barlines kept sorted by position.
   Undo/redo: one step per press.
   No keyboard shortcuts for barlines.
+
+Drawing (drawBarlines), x = position line, offsets in mm:
+  thin 0.3, thick 0.6, dot radius 0.3 at y 8 and 12
+  thickOff = dotOff = 1.05 (centre-to-centre)
+  open-repeat:   thick -1.05, thin 0, dots +1.05
+  close-repeat:  dots -1.05, thin 0, thick +1.05
+  double-repeat: dots -2.10, thin -1.05, thick 0 (shared), thin +1.05, dots +2.10
+                 centred on the position, half in each neighbouring division
+  stop:          thin 0, thick +1.05
 
 Clearing a staff-unit's content (Delete, Clear Page, before whole-unit paste)
 leaves its barlines unchanged.
@@ -287,8 +315,9 @@ Copy/paste:
     are dropped. Paste and barlines form one undo step.
 Paste of any kind is its own undo step.
 
-Repeat number (close-repeat barlines at positions 1-32 only):
-  Editable box in the above zone, right-aligned to the barline.
+Repeat number (close-repeat at positions 1-32, double-repeat at positions 1-31):
+  Editable box in the above zone, right-aligned to the barline's position line
+  (for double-repeat it sits above the left half).
   Font 6pt, colour #8a8a8a. May overlap the finger mark of the division to its left.
   User types digits only (max 2); the "×" is added by CSS.
   Empty: faint "×?" placeholder on screen, hidden in print. Filled: printed.
@@ -318,6 +347,27 @@ Toggle button (palette section "Misc" / "その他"):
   No pressed, active or disabled styling.
   One undo step per press.
 Persistent: saved to data model as greatStaff field on staff-unit
+
+======================================================
+DYNAMICS (HAIRPINS)
+======================================================
+Palette buttons in the Misc / その他 section: < (Crescendo / クレッシェンド),
+> (Decrescendo / デクレッシェンド). Commit function: commitDynamic.
+Span:
+  Multi-division range -> first to last selected division
+  Single division -> that division and the next (division 32 -> 31-32)
+  Nothing selected or multi-staff selection -> no effect
+Same button on the same span removes; the other button converts.
+A new hairpin replaces any hairpin it overlaps in the same staff-unit.
+One undo step per press. No keyboard shortcut. Within one staff-unit only.
+Clearing the start division (range Delete/Backspace, Clear with the division
+selected) removes the hairpin; clearing other divisions in the span does not.
+Copy/paste:
+  Range: hairpins starting in the range are carried, clipped to the range end;
+    on paste, clipped to index 31; dropped if shorter than 2. A pasted hairpin
+    replaces an existing one it overlaps.
+  Whole-unit: carried unchanged.
+Hidden units and print: as other marks.
 
 ======================================================
 TRIPLETS
@@ -362,7 +412,7 @@ Commit Layer   commitTsubo, commitRest, commitDuration,
                commitClearSlot, commitClearDivision,
                commitClearRest, commitClearDuration,
                commitBarlineType, commitGreatStaffToggle,
-               commitToggleBlank
+               commitToggleBlank, commitDynamic
 
 Selection model:
   selectedSlot        one string-slot at a time
@@ -404,6 +454,7 @@ Staff Unit:
   "barlines": [
     { "position": 0, "type": "normal" },
     { "position": 8, "type": "open-repeat" },
+    { "position": 16, "type": "double-repeat", "repeat": "2" },
     { "position": 24, "type": "close-repeat", "repeat": "3" },
     { "position": 32, "type": "stop" }
   ],
@@ -442,7 +493,9 @@ Time Division (empty fields omitted):
   "techArcString": "2",
   "techArcOffset": "3",
   "techArcArmed": "suri",
-  "triplet": "1"
+  "triplet": "1",
+  "dynamic": "cresc",
+  "dynamicLength": "4"
 }
 
 finger values:    "first" | "second" | "third"
@@ -450,6 +503,9 @@ techArc values:   "suri" | "oshibachi"
 techArcArmed:     "suri" | "oshibachi" (mutually exclusive with techArc)
 triplet values:   "1" | "2" | "3" (other values, e.g. legacy "disabled", are ignored on load)
 greatStaff values:"start" | "middle" | "end"
+dynamic values:   "cresc" | "decresc", on the hairpin's start division only
+dynamicLength:    "<n>", n >= 2 divisions; span start to start + n - 1 within 0-31
+                  (invalid or out-of-range values are ignored on load)
 
 ======================================================
 PRINT
