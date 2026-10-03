@@ -338,6 +338,9 @@ let isDragging = false;
 let isDragStaffMode = false;
 
 workspace.addEventListener("click", (e) => {
+  // A text box takes its own clicks: focus the text, leave the selection alone
+  if (e.target.closest(".text-box")) return;
+
   // Suppress click when a drag just ended
   if (isDragging) { isDragging = false; return; }
 
@@ -428,6 +431,7 @@ workspace.addEventListener("mousedown", (e) => {
   isDragging = false;
   isDragStaffMode = false;
   if (e.shiftKey || e.button !== 0) return;
+  if (e.target.closest(".text-box")) { dragAnchorDivision = null; return; }
   let division = e.target.closest(".time-division");
   if (!division) {
     // May be clicking a blank staff-unit whose children are visibility:hidden
@@ -925,6 +929,8 @@ function handleCopy() {
       .map(serializeTimeDivision);
     // Hairpins starting in the range are clipped to the end of the range
     data.forEach((d, i) => clipDynamic(d, data.length - i));
+    // Text boxes starting in the range are clipped the same way
+    data.forEach((d, i) => clipTextBox(d, data.length - i));
     // Interior barlines (lo+1 .. hi), stored relative to the range start
     const barlines = JSON.parse(staffUnit.dataset.barlines || "[]")
       .filter(b => b.pos > lo && b.pos <= hi)
@@ -943,6 +949,7 @@ function handleCopy() {
   if (selectedDivision) {
     const data = [serializeTimeDivision(selectedDivision)];
     clipDynamic(data[0], 1);   // a one-division copy can't carry a hairpin
+    clipTextBox(data[0], 1);   // ...or a text box
     clipboard = { type: "divisions", data };
   }
 }
@@ -967,6 +974,7 @@ function handlePaste() {
       // Hairpins are clipped to the unit end (index 31)
       const data = { ...divData };
       clipDynamic(data, 32 - (startIdx + i));
+      clipTextBox(data, 32 - (startIdx + i));
       clearDivisionFully(target);
       restoreTimeDivision(target, data);
     });
@@ -978,6 +986,11 @@ function handlePaste() {
       const pasted = spans.filter(s => s.start >= startIdx && s.start <= endIdx);
       spans.filter(s => s.start < startIdx && pasted.some(p => s.start <= p.end && s.end >= p.start))
         .forEach(s => removeDynamic(s.div));
+      // Same for text boxes
+      const boxes = getTextBoxSpans(staffUnit);
+      const pastedBoxes = boxes.filter(s => s.start >= startIdx && s.start <= endIdx);
+      boxes.filter(s => s.start < startIdx && pastedBoxes.some(p => s.start <= p.end && s.end >= p.start))
+        .forEach(s => removeTextBox(s.div));
       renderArcLayer(staffUnit);
       pasteRangeBarlines(staffUnit, startIdx, clipboard.data.length, clipboard.barlines || []);
     }
@@ -1371,6 +1384,11 @@ function dispatchCommit(intent) {
 
   if (intent.action === "dynamic") {
     if (commitDynamic(intent.value)) pushHistory();
+    return;
+  }
+
+  if (intent.action === "text-box") {
+    if (commitTextBox()) pushHistory();
     return;
   }
 
@@ -2026,6 +2044,8 @@ function renderArcLayer(staffBlock) {
     path.classList.add("dynamic-hairpin");
     svg.appendChild(path);
   });
+
+  renderTextBoxes(staffBlock);
 }
 
 // Hairpin geometry in mm, relative to the top of the below zone (zone is 4mm tall).
@@ -2091,6 +2111,164 @@ function clipDynamic(data, maxLen) {
   const n = Math.min(Number(data.dynamicLength), maxLen);
   if (n >= 2) data.dynamicLength = String(n);
   else { delete data.dynamic; delete data.dynamicLength; }
+}
+
+// --- Text boxes ---
+// Stored on the start division: data-text-box (may be "") + data-text-box-length.
+// Existence is marked by the length attribute.
+const TEXT_BOX_DIV_MM = 180 / 32;   // width of one division in mm
+const TEXT_BOX_BELOW_TOP_MM = 20;   // fallback: above 4 + tsubo 12 + clearance 4
+
+function getTextBoxSpans(staffUnit) {
+  return Array.from(staffUnit.querySelectorAll(".time-division"))
+    .filter(div => div.dataset.textBoxLength !== undefined)
+    .map(div => {
+      const start = Number(div.dataset.timeIndex);
+      return { div, start, end: start + Number(div.dataset.textBoxLength) - 1 };
+    });
+}
+
+function removeTextBox(div) {
+  delete div.dataset.textBox;
+  delete div.dataset.textBoxLength;
+}
+
+// Same span rule and toggle as hairpins. Same span again removes (text included);
+// otherwise overlapping boxes in the unit are replaced. Returns true if changed.
+function commitTextBox() {
+  if (multiStaffSelection) return false;
+
+  let staffUnit, start, end;
+  if (multiDivisionSelection) {
+    staffUnit = multiDivisionSelection.staffUnit;
+    start = Math.min(multiDivisionSelection.startIndex, multiDivisionSelection.endIndex);
+    end   = Math.max(multiDivisionSelection.startIndex, multiDivisionSelection.endIndex);
+  } else if (selectedDivision) {
+    staffUnit = selectedDivision.closest(".staff-unit");
+    start = end = Number(selectedDivision.dataset.timeIndex);
+  } else {
+    return false;
+  }
+  if (!staffUnit || !staffUnit.isConnected) return false;
+  if (start === end) { start = Math.min(start, 30); end = start + 1; }
+
+  const spans = getTextBoxSpans(staffUnit);
+  const same  = spans.find(s => s.start === start && s.end === end);
+  if (same) {
+    removeTextBox(same.div);
+  } else {
+    spans.filter(s => s.start <= end && s.end >= start).forEach(s => removeTextBox(s.div));
+    const startDiv = staffUnit.querySelector(`.time-division[data-time-index="${start}"]`);
+    startDiv.dataset.textBox = "";
+    startDiv.dataset.textBoxLength = String(end - start + 1);
+  }
+
+  renderArcLayer(staffUnit);
+  return true;
+}
+
+// Clip copied/pasted text boxes: length limited to `maxLen`; dropped below 2
+function clipTextBox(data, maxLen) {
+  if (!data.textBoxLength) return;
+  const n = Math.min(Number(data.textBoxLength), maxLen);
+  if (n >= 2) data.textBoxLength = String(n);
+  else { delete data.textBox; delete data.textBoxLength; }
+}
+
+// Rebuild the unit's text boxes from the division data. A focused box is mid-edit,
+// so the whole rebuild is skipped while any of the unit's boxes has focus.
+function renderTextBoxes(staffUnit) {
+  const layer = staffUnit.querySelector(".notation-layer");
+  if (!layer) return;
+
+  const active = document.activeElement;
+  if (active && active.classList.contains("text-box") && layer.contains(active)) return;
+
+  layer.querySelectorAll(".text-box-clip").forEach(el => el.remove());
+
+  const spans = getTextBoxSpans(staffUnit);
+  if (!spans.length) return;
+
+  const layerRect = layer.getBoundingClientRect();
+  const below = layer.querySelector(".below-zone");
+  let topMm = TEXT_BOX_BELOW_TOP_MM;
+  if (below && layerRect.width > 0) {
+    topMm = (below.getBoundingClientRect().top - layerRect.top) / (layerRect.width / 180);
+  }
+
+  spans.forEach(({ div, start }) => {
+    const len = Number(div.dataset.textBoxLength);
+    const leftMm = start * TEXT_BOX_DIV_MM;
+
+    // Non-interactive wrapper: clips the overflowing text at position 32
+    const clip = document.createElement("div");
+    clip.className = "text-box-clip";
+    clip.style.left   = `${leftMm}mm`;
+    clip.style.width  = `${180 - leftMm}mm`;
+    clip.style.top    = `${topMm}mm`;
+    clip.style.height = "4mm";
+
+    // Editable area is the box's own span width; text may overflow to the right
+    const box = document.createElement("div");
+    box.className = "text-box";
+    box.contentEditable = "true";
+    box.spellcheck = false;
+    box.style.width = `${len * TEXT_BOX_DIV_MM}mm`;
+    box.dataset.placeholder = STRINGS[currentLang]['text-box-placeholder'];
+    box.textContent = div.dataset.textBox || "";
+
+    let valueOnFocus = "";
+    box.addEventListener("focus", () => { valueOnFocus = div.dataset.textBox || ""; });
+
+    box.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") { e.preventDefault(); box.blur(); }
+    });
+
+    // Plain text only, single line
+    box.addEventListener("paste", (e) => {
+      e.preventDefault();
+      const text = (e.clipboardData?.getData("text/plain") || "").replace(/[\r\n]+/g, " ");
+      document.execCommand("insertText", false, text);
+    });
+
+    box.addEventListener("input", () => {
+      const text = box.textContent.replace(/[\r\n]+/g, "");
+      // Clear a stray <br> left by the browser so :empty applies (placeholder)
+      if (text === "" && box.innerHTML !== "") box.innerHTML = "";
+      div.dataset.textBox = text;
+      updateTextBoxClip(box);
+    });
+
+    box.addEventListener("blur", () => {
+      if ((div.dataset.textBox || "") !== valueOnFocus) pushHistoryIfChanged();
+    });
+
+    clip.appendChild(box);
+    layer.appendChild(clip);
+    updateTextBoxClip(box);
+    requestAnimationFrame(() => updateTextBoxClip(box));
+  });
+}
+
+// Red "clipped" warning when the text runs past position 32 (the unit's right edge)
+function updateTextBoxClip(box) {
+  const layer = box.closest(".notation-layer");
+  if (!layer || !box.isConnected) return;
+  const layerRect = layer.getBoundingClientRect();
+  let clipped = false;
+  if (layerRect.width > 0 && box.textContent) {
+    const range = document.createRange();
+    range.selectNodeContents(box);
+    clipped = range.getBoundingClientRect().right > layerRect.right + 0.5;
+  }
+  box.classList.toggle("clipped", clipped);
+}
+
+// Web fonts change text widths once loaded
+if (document.fonts && document.fonts.ready) {
+  document.fonts.ready.then(() => {
+    document.querySelectorAll(".text-box").forEach(updateTextBoxClip);
+  });
 }
 
 function renderTripletBrackets() {
@@ -2218,6 +2396,7 @@ function commitClearDivision(division) {
 
   // Clearing the start division removes its hairpin
   removeDynamic(division);
+  removeTextBox(division);
 
   const staffUnit = division.closest(".staff-unit");
   if (staffUnit) renderArcLayer(staffUnit);
@@ -2956,6 +3135,12 @@ function serializeTimeDivision(div) {
     obj.dynamicLength = div.dataset.dynamicLength;
   }
 
+  // Text box, stored on its start division (text only if non-empty)
+  if (div.dataset.textBoxLength !== undefined) {
+    if (div.dataset.textBox) obj.textBox = div.dataset.textBox;
+    obj.textBoxLength = div.dataset.textBoxLength;
+  }
+
   return obj;
 }
 
@@ -3195,6 +3380,17 @@ function restoreTimeDivision(div, data) {
     div.dataset.dynamic       = data.dynamic;
     div.dataset.dynamicLength = String(dynLen);
   }
+
+  // 8. Text box — drawn by renderArcLayer. Invalid length or a span running
+  //    past index 31 is ignored; a non-string text becomes "".
+  const boxLen = Number(data.textBoxLength);
+  if (Number.isInteger(boxLen) && boxLen >= 2 &&
+      Number(div.dataset.timeIndex) + boxLen - 1 <= 31) {
+    div.dataset.textBox = typeof data.textBox === "string"
+      ? data.textBox.replace(/[\r\n]+/g, "")
+      : "";
+    div.dataset.textBoxLength = String(boxLen);
+  }
 }
 
 function restoreLyricUnit(unit, block) {
@@ -3258,6 +3454,7 @@ function clearDivisionFully(div) {
   div.classList.remove("triplet-active");
 
   removeDynamic(div);
+  removeTextBox(div);
 }
 
 // Clear all notation content in a staff unit (barlines are left as-is)
@@ -3462,6 +3659,9 @@ const STRINGS = {
     'palette-barline-double-repeat-title': 'Double repeat',
     'palette-dynamic-cresc-title':   'Crescendo',
     'palette-dynamic-decresc-title': 'Decrescendo',
+    'palette-text-box':       'Text',
+    'palette-text-box-title': 'Text box',
+    'text-box-placeholder':   'Text',
     'palette-clear':         'Clear',
     'palette-copy':          'Copy',
     'palette-paste':         'Paste',
@@ -3513,6 +3713,9 @@ const STRINGS = {
     'palette-barline-double-repeat-title': '両側反復記号',
     'palette-dynamic-cresc-title':   'クレッシェンド',
     'palette-dynamic-decresc-title': 'デクレッシェンド',
+    'palette-text-box':       'テキスト',
+    'palette-text-box-title': 'テキストボックス',
+    'text-box-placeholder':   'テキスト',
     'palette-clear':         'クリア',
     'palette-copy':          'コピー',
     'palette-paste':         '貼り付け',
@@ -3596,6 +3799,12 @@ function setLanguage(lang) {
   });
   ["cresc", "decresc"].forEach(t => {
     document.querySelector(`[data-action="dynamic"][data-value="${t}"]`).title = s[`palette-dynamic-${t}-title`];
+  });
+  const textBoxBtn = document.querySelector('[data-action="text-box"]');
+  textBoxBtn.textContent = s['palette-text-box'];
+  textBoxBtn.title       = s['palette-text-box-title'];
+  document.querySelectorAll('.text-box').forEach(el => {
+    el.dataset.placeholder = s['text-box-placeholder'];
   });
   document.querySelector('[data-action="clear"]').textContent                     = s['palette-clear'];
   document.querySelector('[data-action="editing"][data-value="copy"]').textContent  = s['palette-copy'];

@@ -661,6 +661,40 @@ body {
   outline-offset: -0.2mm;
 }
 
+/* Free text over the below zones. The clip wrapper stops overflowing text at position 32
+   (right edge of the unit); only the box itself (its span width) takes clicks. */
+.text-box-clip {
+  position: absolute;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.text-box {
+  pointer-events: auto;
+  box-sizing: border-box;
+  height: 4mm;
+  line-height: 4mm;
+  font-family: "IBM Plex Sans JP", sans-serif;
+  font-size: 8pt;
+  color: black;
+  text-align: left;
+  white-space: nowrap;
+  overflow: visible;
+  user-select: text;
+  cursor: text;
+  outline: none;
+}
+
+.text-box:focus {
+  outline: 0.4mm solid rgba(200,160,48,0.4);
+  outline-offset: -0.2mm;
+}
+
+.text-box.clipped {
+  color: red;
+}
+
 .finger-mark {
   font-size: 8pt;
 }
@@ -803,6 +837,9 @@ body {
   [data-placeholder]:empty::before { display: none; }
 
   .repeat-box:empty { display: none; }
+
+  .text-box,
+  .text-box.clipped { color: black; }
 
 }
 
