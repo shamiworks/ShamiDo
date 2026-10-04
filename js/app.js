@@ -1584,11 +1584,16 @@ function commitRest(division) {
 function commitDurationUnderline(division, type) {
   if (!division) return;
 
-  // type: "single" | "double"
-  commitClearDuration(division);
+  // type: "single" | "double" | null (clears the underline only; the dot is kept)
+  delete division.dataset.durationUnderline;
+  getStringSlots(division).forEach(slot => {
+    slot.classList.remove("single", "double", "dotted");
+  });
 
   const anchor = getBottomMostActiveSlot(division);
   if (!anchor) return;
+
+  if (division.dataset.durationDot === "true") anchor.classList.add("dotted");
 
   if (type === "single") {
     anchor.classList.add("single");
@@ -2825,6 +2830,7 @@ function commitToggleBlank() {
     if (isBlank) { unit.dataset.blank = 'true'; } else { delete unit.dataset.blank; }
   }
   updateBlankButton();
+  pushHistoryIfChanged();
 }
 
 
@@ -3338,9 +3344,9 @@ function restoreTimeDivision(div, data) {
     });
   }
 
-  // 2. Duration — underline before dot (commitDurationUnderline clears the dot internally)
+  // 2. Duration — underline, then dot (dot is toggled, so only set it if not already on)
   if (data.durationUnderline) commitDurationUnderline(div, data.durationUnderline);
-  if (data.durationDot)       commitDurationDot(div);
+  if (data.durationDot && div.dataset.durationDot !== "true") commitDurationDot(div);
 
   // 3. Technique booleans
   if (data.sukui)    commitSukui(div);
@@ -3505,6 +3511,7 @@ document.getElementById("delete-page").addEventListener("click", () => {
 
   page.remove();
   updatePageNumbers();
+  pushHistory();
 });
 
 /*

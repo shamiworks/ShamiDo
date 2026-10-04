@@ -1,6 +1,6 @@
 ShamiDō 三味道 - ROADMAP
 ==============================
-Last updated: 2026-10-03
+Last updated: 2026-10-04
 
 Status values: NOT STARTED | IN PROGRESS | DONE | DROPPED
 
@@ -117,12 +117,31 @@ V1.3
     - Barline buttons reordered: Normal, Stop, Open repeat, Close repeat, Double repeat
 33. Repeat measure symbol                          DROPPED
     - Redundant with the repeat number box
-34. Editable text box in above or below zone       NOT STARTED
-    - For general performance notes
-    - Undecided
+34. Editable text box in the below zone            DONE
+    - "Text" / "テキスト" button in the Misc section; commitTextBox; no shortcut
+    - Same span rules and toggle as hairpins; a new box replaces any it overlaps
+    - Box span width sets the click area; text overflows right, clipped at position 32
+      (red on screen only when clipped); IBM Plex Sans JP about 8pt
+    - Placeholder on screen only; click edits without changing the selection
+    - Edit is one undo step on blur; Enter finishes; keys in the box trigger no shortcuts
+    - Stored on the start division: "textBox" + "textBoxLength"
+    - Copy/paste as hairpins; hidden units hide their boxes
 44. Quadruplets                                    DROPPED
     - Considered and dropped. No bunkafu precedent found; the 4300 pattern
       is already written as plain consecutive divisions.
+45. Clearing and undo fixes                         DONE
+    - Single clear path: Backspace, Delete and Clear button all call handleClear
+    - Clear works on drag/shift ranges and several selected units
+    - Every clear that changes something is one undo step; no-ops record none
+      (includes Clear Page and the duration "-" button)
+    - Second press of rest, duration single/double or finger removes it
+    - d and f keys cycle from the stored value of the selected division
+    - Division and range clears also remove ha, maebachi, sukui, hajiki, keshi,
+      uchi and below-zone content; whole-unit clears and Clear Page also remove
+      armed suri/oshibachi
+46. Lyric unit hide removed                         DONE
+    - Hide applies to staff units only
+    - Old files with a lyric "blank" flag still open; the flag is ignored
 
 ======================================================
 V2.0 — NEW ARCHITECTURE REQUIRED

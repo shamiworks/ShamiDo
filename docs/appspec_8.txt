@@ -1,6 +1,6 @@
 ShamiDō 三味道 - SPECIFICATION
 ====================================
-Last updated: 2026-10-03
+Last updated: 2026-10-04
 
 ======================================================
 FONTS
@@ -29,6 +29,15 @@ DOM HIERARCHY
   .lyric-page-content   (staff + lyric alternating page)
     .header
     .staff-unit
+      .staff-metadata
+      .staff-section
+        .staff-svg
+        .notation-layer
+          .arc-layer
+          .time-division x32
+          .repeat-box   (one per close-repeat / double-repeat barline)
+          .text-box-clip  (one per text box; non-interactive clipping wrapper)
+            .text-box     (editable)
     .lyric-unit         (lyric page only, follows every staff-unit)
     .staff-unit
     .lyric-unit
@@ -77,7 +86,10 @@ INFO PANEL (.info-panel)
 Slide-in from right, width 320px, top 40px
 Sections: Getting started, Changing the number of measures,
           Changing barline types, Suri and oshibachi,
-          Triplets, Keyboard shortcuts
+          Triplets, Selecting multiple divisions,
+          Selecting multiple staff units, Great staff,
+          Hiding units, Text box, Keyboard shortcuts
+All text is bilingual (data-en / data-ja attributes).
 Close button top right.
 
 ======================================================
@@ -168,6 +180,8 @@ dataset:
   data-triplet            "1" | "2" | "3" | absent
   data-dynamic            "cresc" | "decresc" | absent   (hairpin start division only)
   data-dynamic-length     number of divisions, >= 2 | absent
+  data-text-box           text of the box ("" when empty)   (text box start division only)
+  data-text-box-length    number of divisions, >= 2 | absent (marks that a box exists)
 
 Note: data-tech-arc and data-tech-arc-armed are mutually exclusive.
       data-tech-arc-armed draws a placeholder arc to the next division
@@ -227,6 +241,8 @@ String slot states:
     lower edge stays inside the zone; upper edge clears マ by 0.2mm
     and the triplet bracket line (22.0mm) by 0.05mm
     the triplet "3" (computed 11pt) overlaps the hairpin by up to 0.9mm (accepted)
+  Text boxes are not part of the arc layer SVG: they are HTML elements appended
+    to .notation-layer by renderTextBoxes (called from renderArcLayer). See TEXT BOX.
 
 ======================================================
 SURI / OSHIBACHI WORKFLOW
@@ -250,10 +266,14 @@ Flow C: enter both tsubo first (original flow)
   3. Navigate back to start division
   4. Click suri/oshibachi — arc resolves immediately
 
-Clearing:
-  Clearing start tsubo reverts resolved arc to armed (placeholder)
-  Clearing all tsubo from armed division removes arc entirely
-  Backspace and Clear palette button both handle arc clearing
+Clearing (Backspace, Delete and the Clear button behave identically, see CLEARING):
+  Slot clear of the start tsubo reverts a resolved arc to armed (placeholder)
+  Slot clear of the last tsubo of an armed division removes the arc entirely
+  Division clear and range clear remove resolved and armed arcs on the division
+  Whole-unit clear (several staff units selected, Clear Page) removes all arcs,
+    including armed ones
+  Slot clear of the target tsubo of a resolved arc leaves the arc in place
+  Pressing suri/oshibachi again on the division also removes the arc
 
 ======================================================
 BARLINES
@@ -303,8 +323,9 @@ Drawing (drawBarlines), x = position line, offsets in mm:
                  centred on the position, half in each neighbouring division
   stop:          thin 0, thick +1.05
 
-Clearing a staff-unit's content (Delete, Clear Page, before whole-unit paste)
-leaves its barlines unchanged.
+Whole-unit clears (Backspace, Delete or Clear with several staff units selected,
+Clear Page, before whole-unit paste) leave barlines unchanged. Division and range
+clears never touch barlines. A single clicked staff unit is not clearable.
 
 Copy/paste:
   Whole-unit: barlines pasted as-is.
@@ -360,8 +381,9 @@ Span:
 Same button on the same span removes; the other button converts.
 A new hairpin replaces any hairpin it overlaps in the same staff-unit.
 One undo step per press. No keyboard shortcut. Within one staff-unit only.
-Clearing the start division (range Delete/Backspace, Clear with the division
-selected) removes the hairpin; clearing other divisions in the span does not.
+Clearing the start division (division clear, range clear, whole-unit clear)
+removes the hairpin; clearing other divisions in the span does not. A slot clear
+never removes it.
 Copy/paste:
   Range: hairpins starting in the range are carried, clipped to the range end;
     on paste, clipped to index 31; dropped if shorter than 2. A pasted hairpin
@@ -370,24 +392,121 @@ Copy/paste:
 Hidden units and print: as other marks.
 
 ======================================================
+TEXT BOX
+======================================================
+Free text for performance notes, in the below zone only.
+Palette button in the Misc / その他 section: "Text" / "テキスト"
+(data-action="text-box"). No keyboard shortcut. Commit function: commitTextBox.
+Span: same rules as hairpins
+  Multi-division range -> first to last selected division
+  Single division -> that division and the next, capped so the box ends at
+    division 32 (division 32 -> 31-32)
+  Nothing selected or multi-staff selection -> no effect
+Same span pressed again removes the box (text included). A new box replaces any
+box it overlaps in the same staff-unit. Several boxes per unit. One undo step per
+press. May overlap マ, triplet brackets and hairpins.
+Layout:
+  .text-box-clip   absolute, left at the start division, extends to position 32,
+                   overflow hidden, pointer-events none, z-index 3, height 4mm,
+                   top aligned to the below zone
+  .text-box        contentEditable, width = box span (sets the click area),
+                   IBM Plex Sans JP 8pt, black, one line, text overflows to the right
+  Text beyond position 32 is clipped; the box turns red on screen only while
+  clipped (black in print).
+  Empty box: faint "Text" / "テキスト" placeholder on screen only; prints nothing.
+Editing:
+  Click focuses the text and does not change the selection or start a drag.
+  Typing, Backspace and Delete in the box never trigger shortcuts or clear.
+  Plain text only (paste is flattened to one line). Enter finishes editing.
+  Edit is one undo step, recorded on blur if the text changed.
+  renderTextBoxes skips rebuilding a unit while one of its boxes has focus.
+Clearing: clearing the start division (division, range or whole-unit clear)
+  removes the box; clearing other divisions in the span leaves it; a slot clear
+  never removes it.
+Copy/paste: as hairpins. Range: boxes starting in the range are carried, clipped to
+  the range end; on paste clipped to index 31; dropped if shorter than 2; a pasted
+  box replaces an existing one it overlaps. A one-division copy carries no box.
+  Whole-unit: carried unchanged.
+Hidden units hide their text boxes.
+Saved: textBox (omitted when empty) + textBoxLength on the start division.
+
+======================================================
 TRIPLETS
 ======================================================
 Use 3 consecutive time-divisions, all active (triplet notes 1-3)
 Bracket drawn below staff on .arc-layer, spanning all 3 divisions
 Keyboard shortcut: t
-Toggle off from any triplet division or Backspace (clears all 3)
+Toggle off: t on any triplet division, or Backspace / Delete / Clear with a
+triplet division or one of its slots selected. Either removes the triplet marking
+from all 3 divisions only; their content is kept (a second Clear then clears the
+selected slot or division). A drag-selected range clear does not remove triplet
+markers (content is cleared). A multi-unit clear and Clear Page remove them.
+
+======================================================
+CLEARING
+======================================================
+handleClear() is the single clear path. Backspace, Delete and the palette Clear
+button all call it and behave identically in every selection state. Ignored while
+typing in a contentEditable field (header, lyrics, bar number, repeat box, text box).
+By selection state:
+  Several staff units selected  whole-unit clear of each (clearStaffUnitContent)
+  Division range (drag/shift)   commitClearDivision on each division in the range only
+  Triplet division, or a slot   removes the triplet (see TRIPLETS); nothing else
+    in it, selected
+  Slot selected                 commitClearSlot (that slot only)
+  Division selected, no slot    commitClearDivision
+  Single staff unit selected,   nothing (intentionally not clearable)
+    no division
+Slot clear: empties the slot. If it was the start tsubo of a resolved arc the arc
+  reverts to armed. If no tsubo remain: duration cleared and any armed arc removed.
+  Does not touch ha, maebachi, finger, sukui/hajiki/keshi/uchi, hairpin or text box.
+Division clear (also used per division by a range clear): slots, rest, duration,
+  finger, ha, maebachi, sukui, hajiki, keshi, uchi (flags and glyphs), below-zone
+  content, resolved and armed arcs, and a hairpin / text box starting on it.
+  Triplet markers and barlines are kept.
+Whole-unit clear (clearDivisionFully on all 32 divisions; also used by Clear Page
+  and on target divisions before a paste): everything a division clear removes,
+  plus triplet markers and armed (placeholder) arcs. Keeps barlines, great staff,
+  hide state, bar number and part label. Clear Page also empties the page's lyric lines.
+Undo: every clear that changes the document is one undo step; a clear that changes
+  nothing records none. handleClear and the Clear Page and duration "-" actions end
+  with pushHistoryIfChanged(), which pushes only if the serialised document differs
+  from the current history entry. Applies to slot, division, range, multi-unit and
+  Clear Page clears.
+
+======================================================
+PALETTE AND KEY RULES
+======================================================
+Pressing the value already set removes it (toggle off):
+  Rest (palette ● and r key)         removes the rest; otherwise sets it
+  Duration single / double (palette) removes the underline only; the dot stays
+  Finger Ⅰ / Ⅱ / Ⅲ (palette)         removes the finger mark
+The cycle keys read the stored value of the selected division:
+  d   none -> single -> double -> none   (data-duration-underline; dot is kept)
+  f   none -> Ⅰ -> Ⅱ -> Ⅲ -> none        (data-finger)
+The duration "-" and finger "-" buttons clear (duration "-" clears underline and dot).
+Duration "-" is one undo step only if something changed.
+Setting, changing or removing the underline never clears the duration dot; the
+dotted class is re-applied to the bottom-most tsubo slot (the underline anchor).
+A rest clears duration including the dot.
+Delete Page (valid page only) and Hide / Show (a unit's blank state changed) are
+one undo step each; cancelled or invalid input and Hide with nothing selected
+record nothing.
 
 ======================================================
 BLANK UNITS
 ======================================================
-Any staff-unit or lyric-unit can be hidden using the Hide palette button.
+Staff units only can be hidden, using the Hide palette button (Editing row).
+Lyric units cannot be hidden. Older files may carry a blank flag on a lyric unit;
+it is ignored on load and not saved.
 Toggled with the Hide/Show button in the Editing palette row.
-Hidden units:
+Hidden staff units:
   - Occupy their normal space in the layout
   - Are fully selectable (click or drag)
   - Show amber selection outline when selected
   - Are not visible in print
-Persistent: saved as blank: true on the unit object.
+  - Hide their text boxes with the rest of the staff section
+Persistent: saved as blank: true on the staff unit object.
 
 ======================================================
 LYRIC UNIT (.lyric-unit)
@@ -396,8 +515,7 @@ Width: 180mm, margin-left: 10mm
 Height: 25mm
 3x .lyric-line divs (contentEditable, spellcheck false)
   height: 8mm, font-size 11pt
-dataset:
-  data-blank    "true" | absent
+Cannot be hidden.
 
 ======================================================
 JS ARCHITECTURE
@@ -405,14 +523,33 @@ JS ARCHITECTURE
 Input Layer    palette clicks, keyboard
 Intent Layer   { action, value }
 Dispatch Layer dispatchCommit(intent)
-Commit Layer   commitTsubo, commitRest, commitDuration,
-               commitSukui, commitHajiki, commitKeshi,
-               commitUchi, commitMaebachi, commitHa,
-               commitTechArc, commitFinger,
+Commit Layer   commitTsubo, commitRest, commitDurationUnderline,
+               commitDurationDot, commitSukui, commitHajiki,
+               commitKeshi, commitUchi, commitMaebachi, commitHa,
+               commitTechArc, commitTriplet, commitFinger,
                commitClearSlot, commitClearDivision,
                commitClearRest, commitClearDuration,
                commitBarlineType, commitGreatStaffToggle,
-               commitToggleBlank, commitDynamic
+               commitToggleBlank, commitDynamic, commitTextBox
+
+Clear path (outside the dispatch layer):
+  keydown (Backspace / Delete) and the palette Clear button both call
+  handleClear() directly. keyToIntent still maps the keys to { action: "clear" }
+  for the keydown handler, but dispatchCommit has no "clear" case.
+  handleClear picks the commit function from the selection state (see CLEARING):
+  clearMultiSelectionContent (range or several units), commitTriplet,
+  commitClearSlot or commitClearDivision, then calls pushHistoryIfChanged().
+History:
+  pushHistory()           unconditional snapshot (dispatch actions, paste, barlines)
+  pushHistoryIfChanged()  snapshot only if the serialised document differs from the
+                          current history entry. Used by handleClear, Clear Page,
+                          the duration "-" button and text box blur.
+  commitTextBox(): returns true if the unit changed; dispatchCommit then calls
+                   pushHistory() (as commitDynamic). Text edits are recorded on
+                   blur by the box itself (renderTextBoxes).
+Palette-only actions handled in handlePaletteInput before dispatch: clear,
+  duration-empty, editing (copy / paste), toggle-blank. The same-value toggle-off
+  for duration underline and finger is also applied there.
 
 Selection model:
   selectedSlot        one string-slot at a time
@@ -460,7 +597,7 @@ Staff Unit:
   ],
   "timeDivisions": [ ...32 time-division objects ],
   "greatStaff": "start",
-  "blank": true,
+  "blank": true,         (hidden staff unit)
   "barNumber": "1",
   "partLabel": "Part I"
 }
@@ -468,9 +605,10 @@ Staff Unit:
 Lyric Unit:
 {
   "type": "lyric-unit",
-  "lines": ["", "", ""],
-  "blank": true
+  "lines": ["", "", ""]
 }
+(No blank flag: lyric units cannot be hidden. A legacy "blank" on a lyric unit
+ is ignored on load.)
 
 Time Division (empty fields omitted):
 {
@@ -495,7 +633,9 @@ Time Division (empty fields omitted):
   "techArcArmed": "suri",
   "triplet": "1",
   "dynamic": "cresc",
-  "dynamicLength": "4"
+  "dynamicLength": "4",
+  "textBox": "rit.",
+  "textBoxLength": "4"
 }
 
 finger values:    "first" | "second" | "third"
@@ -506,6 +646,11 @@ greatStaff values:"start" | "middle" | "end"
 dynamic values:   "cresc" | "decresc", on the hairpin's start division only
 dynamicLength:    "<n>", n >= 2 divisions; span start to start + n - 1 within 0-31
                   (invalid or out-of-range values are ignored on load)
+textBox:          text of the box, on the box's start division only; omitted when empty
+                  (line breaks stripped on load; a non-string value becomes empty)
+textBoxLength:    "<n>", n >= 2 divisions; span start to start + n - 1 within 0-31
+                  (invalid or out-of-range values are ignored on load; the box exists
+                  only if textBoxLength is present and valid)
 
 ======================================================
 PRINT
@@ -516,6 +661,8 @@ PRINT
   .page shadow removed, margin 0
   body overflow hidden
   blank units: children visibility: hidden (unit still occupies space)
+  placeholders (including the empty text box placeholder) not printed
+  text boxes always black (the red "clipped" warning is screen only)
 @page: size A4, margin 0
 
 ======================================================

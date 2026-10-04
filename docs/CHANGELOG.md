@@ -25,7 +25,41 @@
 - Saved with the document and carried by copy/paste (clipped to the copied range)
 - Taller hairpins: the opening is now 1.55mm (was 1.0mm), still clear of the maebachi mark
 
+### Editing
+
+**Clearing**
+- Backspace, Delete and the Clear button are now one command and behave the same in every selection state
+- Clear now works on a range of time-divisions (drag or shift-click), clearing that range only
+- Clear now works on several selected staff units, clearing their content but keeping barlines, great staff, bar number and part label
+- Clearing with a single staff unit selected and no time-division selected still does nothing
+- Division and range clears now also remove ha, maebachi, sukui, hajiki, keshi, uchi and the content below the staff
+- Clearing a whole staff unit or a page also removes armed (placeholder) suri and oshibachi arcs
+
+**Undo**
+- Every clear that changes something is one undo step, including range, multi-unit and Clear Page clears and the duration "-" button
+- A clear that changes nothing records no undo step
+- Delete Page and Hide / Show are now undoable
+
+**Duration dot**
+- The duration dot is kept when the underline changes (single, double, toggled off or cycled to none); only the duration "-" button, a rest or a clear removes it
+
+**Toggle off and cycles**
+- Pressing the rest, duration (single or double) or finger (Ⅰ, Ⅱ, Ⅲ) button again now removes it; the R key does the same for rest
+- The D and F keys now cycle from the value stored on the selected time-division
+- The duration "-" and finger "-" buttons clear
+
 ### Notation
+
+**Text box**
+- New Text / テキスト button in the Misc / その他 palette section for general performance notes below the staff
+- Select a range of time-divisions for a text box across it, or a single time-division to cover it and the next
+- Press the button again on the same span to remove the box; a new box replaces any box it overlaps
+- Click the box to type; the selection is unchanged and shortcuts, Backspace and Delete do not act on the staff while typing
+- Text may run past the box to the right but is clipped at the end of the staff unit, and turns red on screen when clipped
+- The empty-box placeholder shows on screen only; an empty box prints nothing
+- Each edit is one undo step; Enter finishes editing
+- Clearing the box's first time-division removes it
+- Saved with the document and carried by copy/paste (clipped to the copied range)
 
 **Maebachi mark**
 - The maebachi mark is now マ instead of 前, on the staff and on the palette button
@@ -33,6 +67,10 @@
 - Display only: files are saved as before, and older files open with their maebachi marks shown as マ
 
 ### Interface
+
+**Hiding units**
+- Hide now applies to staff units only; lyric units can no longer be hidden
+- Older files with a hidden lyric unit still open, with the lyric unit shown
 
 **Barline button order**
 - Barline buttons are now ordered Normal, Stop, Open repeat, Close repeat, Double repeat
@@ -45,6 +83,7 @@
 
 **Instructions**
 - Barline section now notes that the double-repeat button does not cycle and works on time-divisions 1–31 only
+- New Text box section; Backspace / Delete listed as the Clear shortcut; clearing described in the suri/oshibachi, triplet and selection sections
 
 ## v1.2
 
